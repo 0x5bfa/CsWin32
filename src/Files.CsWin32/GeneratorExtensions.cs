@@ -8,9 +8,9 @@ namespace Files.CsWin32;
 /// </summary>
 public static class GeneratorExtensions
 {
-    /// <inheritdoc cref="IGenerator.TryGenerate(string, out IReadOnlyCollection{string}, CancellationToken)"/>
-    public static bool TryGenerate(this IGenerator generator, string apiNameOrModuleWildcard, CancellationToken cancellationToken) => generator.TryGenerate(apiNameOrModuleWildcard, out _, cancellationToken);
+	/// <inheritdoc cref="IGenerator.TryGenerate(string, out IReadOnlyCollection{string}, CancellationToken)"/>
+	public static bool TryGenerate(this IGenerator generator, string apiNameOrModuleWildcard, CancellationToken cancellationToken) => generator.TryGenerate(apiNameOrModuleWildcard, out _, cancellationToken);
 
-    /// <inheritdoc cref="IGenerator.TryGenerateType(string, out IReadOnlyCollection{string})"/>
-    public static bool TryGenerateType(this IGenerator generator, string possiblyQualifiedName) => generator.TryGenerateType(possiblyQualifiedName, out _);
+	/// <inheritdoc cref="IGenerator.TryGenerateType(string, out IReadOnlyCollection{string})"/>
+	public static bool TryGenerateType(this IGenerator generator, string possiblyQualifiedName) => generator.TryGenerateType(possiblyQualifiedName, out _);
 }

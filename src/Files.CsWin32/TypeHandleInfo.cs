@@ -5,36 +5,36 @@ namespace Files.CsWin32;
 
 internal abstract record TypeHandleInfo
 {
-    private static readonly TypeSyntaxSettings DebuggerDisplaySettings = new TypeSyntaxSettings(null, PreferNativeInt: false, PreferMarshaledTypes: false, AllowMarshaling: false, QualifyNames: true);
+	private static readonly TypeSyntaxSettings DebuggerDisplaySettings = new TypeSyntaxSettings(null, PreferNativeInt: false, PreferMarshaledTypes: false, AllowMarshaling: false, QualifyNames: true);
 
-    internal bool IsConstantField { get; init; }
+	internal bool IsConstantField { get; init; }
 
-    internal abstract TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, Generator.GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default);
+	internal abstract TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, Generator.GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default);
 
-    internal abstract bool? IsValueType(TypeSyntaxSettings inputs);
+	internal abstract bool? IsValueType(TypeSyntaxSettings inputs);
 
-    protected static bool TryGetSimpleName(TypeSyntax nameSyntax, [NotNullWhen(true)] out string? simpleName)
-    {
-        if (nameSyntax is QualifiedNameSyntax qname)
-        {
-            simpleName = qname.Right.Identifier.ValueText;
-        }
-        else if (nameSyntax is SimpleNameSyntax simple)
-        {
-            simpleName = simple.Identifier.ValueText;
-        }
-        else
-        {
-            simpleName = null;
-            return false;
-        }
+	protected static bool TryGetSimpleName(TypeSyntax nameSyntax, [NotNullWhen(true)] out string? simpleName)
+	{
+		if (nameSyntax is QualifiedNameSyntax qname)
+		{
+			simpleName = qname.Right.Identifier.ValueText;
+		}
+		else if (nameSyntax is SimpleNameSyntax simple)
+		{
+			simpleName = simple.Identifier.ValueText;
+		}
+		else
+		{
+			simpleName = null;
+			return false;
+		}
 
-        return true;
-    }
+		return true;
+	}
 
-    protected TypeSyntax ToTypeSyntaxForDisplay() => this.ToTypeSyntax(DebuggerDisplaySettings, Generator.GeneratingElement.Other, null).Type;
+	protected TypeSyntax ToTypeSyntaxForDisplay() => this.ToTypeSyntax(DebuggerDisplaySettings, Generator.GeneratingElement.Other, null).Type;
 
-    protected Generator.Context GetContext(TypeSyntaxSettings inputs) => inputs.Generator is not null
-        ? inputs.Generator.DefaultContext with { AllowMarshaling = inputs.AllowMarshaling }
-        : new() { AllowMarshaling = inputs.AllowMarshaling };
+	protected Generator.Context GetContext(TypeSyntaxSettings inputs) => inputs.Generator is not null
+		? inputs.Generator.DefaultContext with { AllowMarshaling = inputs.AllowMarshaling }
+		: new() { AllowMarshaling = inputs.AllowMarshaling };
 }

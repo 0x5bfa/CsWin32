@@ -5,5 +5,5 @@ namespace Files.CsWin32;
 
 internal interface ITypeHandleContainer
 {
-    TypeHandleInfo ElementType { get; }
+	TypeHandleInfo ElementType { get; }
 }
