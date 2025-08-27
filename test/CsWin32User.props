@@ -1,15 +1,15 @@
 <Project>
 
-	<Import Project="$(RepoRootPath)src\Microsoft.Windows.CsWin32\build\Microsoft.Windows.CsWin32.props" />
+	<Import Project="$(RepoRootPath)src\Files.CsWin32\build\Files.CsWin32.props" />
 
 	<ItemGroup>
-		<ProjectReference Include="$(RepoRootPath)src\Microsoft.Windows.CsWin32\Microsoft.Windows.CsWin32.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-		<Analyzer Include="$(RepoRootPath)bin\Microsoft.Windows.CsWin32\$(Configuration)\netstandard2.0\System.Text.Json.dll" />
-		<Analyzer Include="$(RepoRootPath)bin\Microsoft.Windows.CsWin32\$(Configuration)\netstandard2.0\Microsoft.Bcl.AsyncInterfaces.dll" />
-		<Analyzer Include="$(RepoRootPath)bin\Microsoft.Windows.CsWin32\$(Configuration)\netstandard2.0\System.Text.Encodings.Web.dll" />
-		<Analyzer Include="$(RepoRootPath)bin\Microsoft.Windows.CsWin32\$(Configuration)\netstandard2.0\Microsoft.Windows.SDK.Win32Docs.dll" />
-		<Analyzer Include="$(RepoRootPath)bin\Microsoft.Windows.CsWin32\$(Configuration)\netstandard2.0\MessagePack.dll" />
-		<Analyzer Include="$(RepoRootPath)bin\Microsoft.Windows.CsWin32\$(Configuration)\netstandard2.0\MessagePack.Annotations.dll" />
+		<ProjectReference Include="$(RepoRootPath)src\Files.CsWin32\Files.CsWin32.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+		<Analyzer Include="$(RepoRootPath)bin\Files.CsWin32\$(Configuration)\netstandard2.0\System.Text.Json.dll" />
+		<Analyzer Include="$(RepoRootPath)bin\Files.CsWin32\$(Configuration)\netstandard2.0\Microsoft.Bcl.AsyncInterfaces.dll" />
+		<Analyzer Include="$(RepoRootPath)bin\Files.CsWin32\$(Configuration)\netstandard2.0\System.Text.Encodings.Web.dll" />
+		<Analyzer Include="$(RepoRootPath)bin\Files.CsWin32\$(Configuration)\netstandard2.0\Microsoft.Windows.SDK.Win32Docs.dll" />
+		<Analyzer Include="$(RepoRootPath)bin\Files.CsWin32\$(Configuration)\netstandard2.0\MessagePack.dll" />
+		<Analyzer Include="$(RepoRootPath)bin\Files.CsWin32\$(Configuration)\netstandard2.0\MessagePack.Annotations.dll" />
 	</ItemGroup>
 
 	<ItemGroup>

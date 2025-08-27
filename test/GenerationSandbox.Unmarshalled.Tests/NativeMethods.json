@@ -1,5 +1,5 @@
 ﻿{
-  "$schema": "..\\..\\src\\Microsoft.Windows.CsWin32\\settings.schema.json",
+  "$schema": "..\\..\\src\\Files.CsWin32\\settings.schema.json",
   "emitSingleFile": true,
   "multiTargetingFriendlyAPIs": true,
   "allowMarshaling": false,

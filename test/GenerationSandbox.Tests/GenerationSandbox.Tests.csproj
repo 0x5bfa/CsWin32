@@ -6,7 +6,7 @@
   </ItemGroup>
 
   <ProjectExtensions>
-    <VisualStudio><UserProperties nativemethods_1json__JsonSchema="..\..\src\Microsoft.Windows.CsWin32\settings.schema.json" /></VisualStudio>
+    <VisualStudio><UserProperties nativemethods_1json__JsonSchema="..\..\src\Files.CsWin32\settings.schema.json" /></VisualStudio>
   </ProjectExtensions>
 
 </Project>

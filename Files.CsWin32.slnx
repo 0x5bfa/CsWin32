@@ -12,7 +12,7 @@
   <Folder Name="/src/">
     <File Path="src/Directory.Build.props" />
     <File Path="src/Directory.Build.targets" />
-    <Project Path="src/Microsoft.Windows.CsWin32/Microsoft.Windows.CsWin32.csproj" />
+    <Project Path="src/Files.CsWin32/Files.CsWin32.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <File Path="test/Directory.Build.props" />
@@ -20,7 +20,7 @@
     <File Path="test/GenerationSandbox.props" />
     <Project Path="test/GenerationSandbox.Tests/GenerationSandbox.Tests.csproj" />
     <Project Path="test/GenerationSandbox.Unmarshalled.Tests/GenerationSandbox.Unmarshalled.Tests.csproj" />
-    <Project Path="test/Microsoft.Windows.CsWin32.Tests/Microsoft.Windows.CsWin32.Tests.csproj" />
+    <Project Path="test/Files.CsWin32.Tests/Files.CsWin32.Tests.csproj" />
     <Project Path="test/SpellChecker/SpellChecker.csproj" />
     <Project Path="test/WinRTInteropTest/WinRTInteropTest.csproj">
       <Build Solution="*|NonWindows" Project="false" />

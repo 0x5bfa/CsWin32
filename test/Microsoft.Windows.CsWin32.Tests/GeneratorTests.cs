@@ -21,7 +21,7 @@ public class GeneratorTests : GeneratorTestBase
             where attribute.Name.ToString() == "global::System.Reflection.AssemblyMetadata"
             select attribute;
         AttributeSyntax cswin32Stamp = Assert.Single(assemblyMetadataAttributes);
-        Assert.Equal("Microsoft.Windows.CsWin32", ((LiteralExpressionSyntax?)cswin32Stamp.ArgumentList?.Arguments[0].Expression)?.Token.Value);
+        Assert.Equal("Files.CsWin32", ((LiteralExpressionSyntax?)cswin32Stamp.ArgumentList?.Arguments[0].Expression)?.Token.Value);
         Assert.Equal(ThisAssembly.AssemblyInformationalVersion, ((LiteralExpressionSyntax?)cswin32Stamp.ArgumentList?.Arguments[1].Expression)?.Token.Value);
     }
 
