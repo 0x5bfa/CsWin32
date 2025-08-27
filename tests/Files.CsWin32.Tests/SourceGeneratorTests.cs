@@ -22,7 +22,7 @@ public class SourceGeneratorTests(ITestOutputHelper logger)
                 },
                 ExpectedDiagnostics =
                 {
-                    new DiagnosticResult(SourceGenerator.OptionsParsingError.Id, DiagnosticSeverity.Error),
+                    new DiagnosticResult(DiagnosticDescriptors.OptionsParsingError.Id, DiagnosticSeverity.Error),
                 },
             },
         }.RunAsync(TestContext.Current.CancellationToken);
@@ -52,7 +52,7 @@ public class SourceGeneratorTests(ITestOutputHelper logger)
             NativeMethodsTxt = "CreateFile",
             ExpectedDiagnostics =
             {
-                new DiagnosticResult(SourceGenerator.MissingRecommendedReference.Id, DiagnosticSeverity.Warning),
+                new DiagnosticResult(DiagnosticDescriptors.MissingRecommendedReference.Id, DiagnosticSeverity.Warning),
             },
         }.RunAsync(TestContext.Current.CancellationToken);
     }
@@ -93,7 +93,7 @@ public class SourceGeneratorTests(ITestOutputHelper logger)
             },
             ExpectedDiagnostics =
             {
-                new DiagnosticResult(SourceGenerator.NonUniqueMetadataInputs.Id, DiagnosticSeverity.Error),
+                new DiagnosticResult(DiagnosticDescriptors.NonUniqueMetadataInputs.Id, DiagnosticSeverity.Error),
             },
         }.RunAsync(TestContext.Current.CancellationToken);
     }
