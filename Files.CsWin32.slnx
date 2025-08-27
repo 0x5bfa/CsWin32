@@ -14,8 +14,7 @@
     <File Path="src/Directory.Build.targets" />
     <Project Path="src/Microsoft.Windows.CsWin32/Microsoft.Windows.CsWin32.csproj" />
   </Folder>
-  <Folder Name="/test/">
-    <File Path="test/.editorconfig" />
+  <Folder Name="/tests/">
     <File Path="test/Directory.Build.props" />
     <File Path="test/Directory.Build.targets" />
     <File Path="test/GenerationSandbox.props" />

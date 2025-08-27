@@ -42,10 +42,6 @@
 	</ItemDefinitionGroup>
 
 	<ItemGroup>
-	  <AdditionalFiles Remove="D:\Source\CsWin32\stylecop.json" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<PackageReference Include="MessagePack" />
 		<PackageReference Include="MessagePackAnalyzer" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
