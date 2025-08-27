@@ -15,14 +15,14 @@
     <Project Path="src/Files.CsWin32/Files.CsWin32.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <File Path="test/Directory.Build.props" />
-    <File Path="test/Directory.Build.targets" />
-    <File Path="test/GenerationSandbox.props" />
-    <Project Path="test/GenerationSandbox.Tests/GenerationSandbox.Tests.csproj" />
-    <Project Path="test/GenerationSandbox.Unmarshalled.Tests/GenerationSandbox.Unmarshalled.Tests.csproj" />
-    <Project Path="test/Files.CsWin32.Tests/Files.CsWin32.Tests.csproj" />
-    <Project Path="test/SpellChecker/SpellChecker.csproj" />
-    <Project Path="test/WinRTInteropTest/WinRTInteropTest.csproj">
+    <File Path="tests/Directory.Build.props" />
+    <File Path="tests/Directory.Build.targets" />
+    <File Path="tests/GenerationSandbox.props" />
+    <Project Path="tests/GenerationSandbox.Tests/GenerationSandbox.Tests.csproj" />
+    <Project Path="tests/GenerationSandbox.Unmarshalled.Tests/GenerationSandbox.Unmarshalled.Tests.csproj" />
+    <Project Path="tests/Files.CsWin32.Tests/Files.CsWin32.Tests.csproj" />
+    <Project Path="tests/SpellChecker/SpellChecker.csproj" />
+    <Project Path="tests/WinRTInteropTest/WinRTInteropTest.csproj">
       <Build Solution="*|NonWindows" Project="false" />
     </Project>
   </Folder>
