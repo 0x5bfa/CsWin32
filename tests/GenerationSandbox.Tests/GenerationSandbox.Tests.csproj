@@ -1,12 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\GenerationSandbox.props" />
 
-  <ItemGroup>
-    <Compile Remove="ComRuntimeTests.cs" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
-  </ItemGroup>
+	<Import Project="..\GenerationSandbox.props" />
 
-  <ProjectExtensions>
-    <VisualStudio><UserProperties nativemethods_1json__JsonSchema="..\..\src\Files.CsWin32\settings.schema.json" /></VisualStudio>
-  </ProjectExtensions>
+	<ItemGroup>
+		<Compile Remove="ComRuntimeTests.cs" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
+	</ItemGroup>
+
+	<ProjectExtensions>
+		<VisualStudio>
+			<UserProperties nativemethods_1json__JsonSchema="..\..\src\Files.CsWin32\settings.schema.json" />
+		</VisualStudio>
+	</ProjectExtensions>
 
 </Project>

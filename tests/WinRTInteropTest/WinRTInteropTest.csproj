@@ -1,12 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\CsWin32User.props" />
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
-    <Nullable>disable</Nullable>
-    <IsTestProject>false</IsTestProject>
-    <DisablePolyfill>true</DisablePolyfill>
-  </PropertyGroup>
+	<Import Project="..\CsWin32User.props" />
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+		<Nullable>disable</Nullable>
+		<IsTestProject>false</IsTestProject>
+		<DisablePolyfill>true</DisablePolyfill>
+	</PropertyGroup>
 
 </Project>

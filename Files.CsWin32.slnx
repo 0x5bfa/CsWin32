@@ -17,6 +17,7 @@
     <Project Path="src/Files.CsWin32/Files.CsWin32.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <File Path="tests/CsWin32User.props" />
     <File Path="tests/Directory.Build.props" />
     <File Path="tests/Directory.Build.targets" />
     <File Path="tests/GenerationSandbox.props" />
