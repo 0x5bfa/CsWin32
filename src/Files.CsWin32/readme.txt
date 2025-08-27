@@ -23,4 +23,4 @@ referencing the latter directly is still important to get the latest version of 
 
 Your project must allow unsafe code to support the generated code that will likely use pointers.
 
-Learn more from our README on GitHub: https://github.com/microsoft/CsWin32#readme
+Learn more from our README on GitHub: https://github.com/0x5BFA/Files.CsWin32#readme

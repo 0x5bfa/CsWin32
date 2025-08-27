@@ -11,6 +11,8 @@
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 		<NoWarn>$(NoWarn);NU5128;NU5127;NU5104</NoWarn>
 		<NuSpecFile>Files.CsWin32.nuspec</NuSpecFile>
+		<!-- Include and reference README in nuget package, if a README is in the project directory. -->
+		<PackageReadmeFile Condition="Exists('README.md')">README.md</PackageReadmeFile>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -18,6 +20,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<None Condition="Exists('README.md')" Include="README.md" Pack="true" PackagePath="" />
 		<None Update="readme.txt" Pack="true" PackagePath="" />
 		<None Include="build\**">
 			<Pack>true</Pack>

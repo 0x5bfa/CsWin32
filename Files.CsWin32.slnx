@@ -14,8 +14,6 @@
     <File Path="nuget.config" />
   </Folder>
   <Folder Name="/src/">
-    <File Path="src/Directory.Build.props" />
-    <File Path="src/Directory.Build.targets" />
     <Project Path="src/Files.CsWin32/Files.CsWin32.csproj" />
   </Folder>
   <Folder Name="/tests/">

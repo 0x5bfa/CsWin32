@@ -1,9 +1,0 @@
-<Project>
-
-	<ItemGroup>
-		<Compile Include="$(MSBuildThisFileDirectory)AssemblyInfo.cs" />
-	</ItemGroup>
-
-	<Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
-
-</Project>
