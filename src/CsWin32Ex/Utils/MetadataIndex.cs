@@ -22,7 +22,7 @@ internal class MetadataIndex
 {
 	private static readonly int MaxPooledObjectCount = Math.Max(Environment.ProcessorCount, 4);
 
-	private readonly MetadataFile metadataFile;
+	private readonly WinMDFile metadataFile;
 
 	private readonly Platform? platform;
 
@@ -59,12 +59,12 @@ internal class MetadataIndex
 	/// </summary>
 	/// <param name="metadataFile">The metadata file that this index will represent.</param>
 	/// <param name="platform">The platform filter to apply when reading the metadata.</param>
-	internal MetadataIndex(MetadataFile metadataFile, Platform? platform)
+	internal MetadataIndex(WinMDFile metadataFile, Platform? platform)
 	{
 		this.metadataFile = metadataFile;
 		this.platform = platform;
 
-		using MetadataFile.Rental mrRental = metadataFile.GetMetadataReader();
+		using WinMDFile.WinMDReaderRental mrRental = metadataFile.RentWinMDReader();
 		MetadataReader mr = mrRental.Value;
 		this.MetadataName = Path.GetFileNameWithoutExtension(mr.GetString(mr.GetAssemblyDefinition().Name));
 

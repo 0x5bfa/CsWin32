@@ -56,7 +56,7 @@ namespace CsWin32Ex
 		public static readonly DiagnosticDescriptor UnsafeCodeRequired = new DiagnosticDescriptor(
 			"PInvoke002",
 			"AllowUnsafeCode",
-			"AllowUnsafeBlocks must be set to 'true' in the project file for many APIs. Compiler errors may result.",
+			"AllowUnsafeBlocks must be set to 'true' in the project _memoryMappedFile for many APIs. Compiler errors may result.",
 			"Functionality",
 			DiagnosticSeverity.Warning,
 			isEnabledByDefault: true,
@@ -92,7 +92,7 @@ namespace CsWin32Ex
 		public static readonly DiagnosticDescriptor DocParsingError = new DiagnosticDescriptor(
 			"PInvoke006",
 			"DocsParseError",
-			"An error occurred while reading docs file: \"{0}\": {1}",
+			"An error occurred while reading docs _memoryMappedFile: \"{0}\": {1}",
 			"Configuration",
 			DiagnosticSeverity.Warning,
 			isEnabledByDefault: true);

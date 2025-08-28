@@ -1,7 +1,5 @@
 ﻿// Copyright (c) 0x5BFA.
 
-using System.Dynamic;
-
 namespace CsWin32Ex;
 
 /// <summary>
@@ -36,7 +34,7 @@ public partial class Generator : IGenerator, IDisposable
 	private readonly StructDeclarationSyntax variableLengthInlineArrayStruct2;
 
 	private readonly Dictionary<string, IReadOnlyList<ISymbol>> findTypeSymbolIfAlreadyAvailableCache = new(StringComparer.Ordinal);
-	private readonly MetadataFile.Rental metadataReader;
+	private readonly WinMDFile.WinMDReaderRental metadataReader;
 	private readonly GeneratorOptions options;
 	private readonly CSharpCompilation? compilation;
 	private readonly CSharpParseOptions? parseOptions;
@@ -188,9 +186,9 @@ public partial class Generator : IGenerator, IDisposable
 	/// <param name="parseOptions">The parse options that will be used for the generated code.</param>
 	public Generator(string winMDPath, Docs? docs, IEnumerable<string> additionalAppLocalLibraries, GeneratorOptions options, CSharpCompilation? compilation = null, CSharpParseOptions? parseOptions = null)
 	{
-		MetadataFile metadataFile = MetadataCache.Default.GetMetadataFile(winMDPath);
-		this.MetadataIndex = metadataFile.GetMetadataIndex(compilation?.Options.Platform);
-		this.metadataReader = metadataFile.GetMetadataReader();
+		WinMDFile metadataFile = WinMDFile.Create(winMDPath);
+		this.MetadataIndex = metadataFile.GetWinMDIndex(compilation?.Options.Platform);
+		this.metadataReader = metadataFile.RentWinMDReader();
 
 		this.ApiDocs = docs;
 
@@ -949,7 +947,7 @@ public partial class Generator : IGenerator, IDisposable
 					{
 						AssemblyReference assemblyRef = this.Reader.GetAssemblyReference((AssemblyReferenceHandle)typeRef.ResolutionScope);
 						string scope = this.Reader.GetString(assemblyRef.Name);
-						throw new GenerationFailedException($"Input metadata file \"{scope}\" has not been provided, or is referenced at a version that is lacking the type \"{metadataName}\".");
+						throw new GenerationFailedException($"Input metadata _memoryMappedFile \"{scope}\" has not been provided, or is referenced at a version that is lacking the type \"{metadataName}\".");
 					}
 				}
 			}
