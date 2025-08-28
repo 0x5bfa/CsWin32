@@ -382,7 +382,7 @@ public class GeneratorTests : GeneratorTestBase
     public void AmbiguousApiName()
     {
         this.generator = this.CreateGenerator();
-        Assert.False(this.generator.TryGenerate("IDENTITY_TYPE", out _, out IReadOnlyCollection<string> preciseApi, CancellationToken.None));
+        Assert.False(this.generator.TryGenerate("IDENTITY_TYPE", out IReadOnlyCollection<string> preciseApi, CancellationToken.None));
         Assert.Equal(2, preciseApi.Count);
         Assert.Contains("Windows.Win32.NetworkManagement.NetworkPolicyServer.IDENTITY_TYPE", preciseApi);
         Assert.Contains("Windows.Win32.Security.Authentication.Identity.Provider.IDENTITY_TYPE", preciseApi);

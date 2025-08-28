@@ -10,6 +10,7 @@
 		<!-- <DiaMetadataVersion>0.2.185-preview-g7e1e6a442c</DiaMetadataVersion> -->
 		<ApiDocsVersion>0.1.42-alpha</ApiDocsVersion>
 		<CodeAnalysisVersion>4.13.0</CodeAnalysisVersion>
+		<CodeAnalysisVersionForAnalyzers>3.11.0</CodeAnalysisVersionForAnalyzers>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -36,7 +37,18 @@
 		<PackageVersion Include="Xunit.Assert" Version="2.9.3" />
 	</ItemGroup>
 
-	<Import Project="Directory.Packages.Analyzers.props" Condition="'$(IsTestProject)'!='true'" />
+	<ItemGroup Condition="'$(IsTestProject)'!='true'">
+		<!-- These versions carefully chosen to support VS 2019 Update 11. -->
+		<PackageVersion Update="Microsoft.CodeAnalysis.Common" Version="$(CodeAnalysisVersionForAnalyzers)" />
+		<PackageVersion Update="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(CodeAnalysisVersionForAnalyzers)" />
+		<PackageVersion Update="Microsoft.CodeAnalysis.CSharp" Version="$(CodeAnalysisVersionForAnalyzers)" />
+		<PackageVersion Update="System.Collections.Immutable" Version="5.0.0" />
+		<PackageVersion Update="System.Memory" Version="4.5.4" />
+		<PackageVersion Update="System.Reflection.Metadata" Version="5.0.0" />
+		<PackageVersion Update="System.Runtime.CompilerServices.Unsafe" Version="5.0.0" />
+		<PackageVersion Include="System.Text.Encodings.Web" Version="4.7.1" />
+		<PackageVersion Update="System.Text.Json" Version="4.7.2" />
+	</ItemGroup>
 
 	<ItemGroup Label="Library.Template">
 		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
@@ -45,14 +57,10 @@
 		<PackageVersion Include="xunit.v3" Version="1.1.0" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<!-- Put repo-specific GlobalPackageReference items in this group. -->
-	</ItemGroup>
 	<ItemGroup Label="Library.Template">
 		<GlobalPackageReference Include="CSharpIsNullAnalyzer" Version="0.1.593" />
 		<GlobalPackageReference Include="DotNetAnalyzers.DocumentationAnalyzers" Version="1.0.0-beta.59" />
 		<GlobalPackageReference Include="Microsoft.VisualStudio.Internal.MicroBuild.VisualStudio" Version="$(MicroBuildVersion)" />
-		<!-- The condition works around https://github.com/dotnet/sdk/issues/44951 -->
 		<GlobalPackageReference Include="Nerdbank.GitVersioning" Version="3.7.115" Condition="!('$(TF_BUILD)'=='true' and '$(dotnetformat)'=='true')" />
 		<GlobalPackageReference Include="PolySharp" Version="1.15.0" Condition="'$(DisablePolyfill)'!='true'" />
 	</ItemGroup>
