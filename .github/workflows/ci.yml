@@ -1,4 +1,4 @@
-name: Files.CsWin32 CI
+name: CsWin32Ex CI
 
 on:
   push:

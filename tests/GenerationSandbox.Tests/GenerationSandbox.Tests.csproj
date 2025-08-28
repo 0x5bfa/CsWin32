@@ -8,7 +8,7 @@
 
 	<ProjectExtensions>
 		<VisualStudio>
-			<UserProperties nativemethods_1json__JsonSchema="..\..\src\Files.CsWin32\settings.schema.json" />
+			<UserProperties nativemethods_1json__JsonSchema="..\..\src\CsWin32Ex\settings.schema.json" />
 		</VisualStudio>
 	</ProjectExtensions>
 

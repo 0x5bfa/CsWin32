@@ -1,0 +1,39 @@
+﻿// Copyright (c) 0x5BFA.
+
+namespace CsWin32Ex;
+
+internal abstract record TypeHandleInfo
+{
+	private static readonly TypeSyntaxSettings DebuggerDisplaySettings = new TypeSyntaxSettings(null, PreferNativeInt: false, PreferMarshaledTypes: false, AllowMarshaling: false, QualifyNames: true);
+
+	internal bool IsConstantField { get; init; }
+
+	internal abstract TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default);
+
+	internal abstract bool? IsValueType(TypeSyntaxSettings inputs);
+
+	protected static bool TryGetSimpleName(TypeSyntax nameSyntax, [NotNullWhen(true)] out string? simpleName)
+	{
+		if (nameSyntax is QualifiedNameSyntax qname)
+		{
+			simpleName = qname.Right.Identifier.ValueText;
+		}
+		else if (nameSyntax is SimpleNameSyntax simple)
+		{
+			simpleName = simple.Identifier.ValueText;
+		}
+		else
+		{
+			simpleName = null;
+			return false;
+		}
+
+		return true;
+	}
+
+	protected TypeSyntax ToTypeSyntaxForDisplay() => this.ToTypeSyntax(DebuggerDisplaySettings, GeneratingElement.Other, null).Type;
+
+	protected Generator.Context GetContext(TypeSyntaxSettings inputs) => inputs.Generator is not null
+		? inputs.Generator.DefaultContext with { AllowMarshaling = inputs.AllowMarshaling }
+		: new() { AllowMarshaling = inputs.AllowMarshaling };
+}

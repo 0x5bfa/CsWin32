@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+
+	<metadata>
+		<id>CsWin32Ex</id>
+		<version>$version$</version>
+		<authors>0x5BFA</authors>
+		<developmentDependency>true</developmentDependency>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<license type="expression">MIT</license>
+		<licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+		<projectUrl>https://github.com/0x5BFA/CsWin32Ex</projectUrl>
+		<description>A variant of CsWin32 specifically tailored for unmarshaled scenarios.</description>
+		<releaseNotes>$PackageReleaseNotes$</releaseNotes>
+		<readme>..\..\README.md</readme>
+		<copyright>© 0x5BFA. All rights reserved.</copyright>
+		<repository type="git" url="https://github.com/0x5BFA/CsWin32Ex.git" commit="$commit$" />
+		<dependencies>
+			<group targetFramework="net20">
+				<dependency id="Microsoft.Windows.SDK.Win32Metadata" version="$MetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.WDK.Win32Metadata" version="$WDKMetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.SDK.Win32Docs" version="$ApiDocsVersion$" include="buildTransitive" />
+			</group>
+			<group targetFramework="net45">
+				<dependency id="Microsoft.Windows.SDK.Win32Metadata" version="$MetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.WDK.Win32Metadata" version="$WDKMetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.SDK.Win32Docs" version="$ApiDocsVersion$" include="buildTransitive" />
+			</group>
+			<group targetFramework="net461">
+				<dependency id="Microsoft.Windows.SDK.Win32Metadata" version="$MetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.WDK.Win32Metadata" version="$WDKMetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.SDK.Win32Docs" version="$ApiDocsVersion$" include="buildTransitive" />
+			</group>
+			<group targetFramework=".NETStandard1.1">
+				<dependency id="Microsoft.Windows.SDK.Win32Metadata" version="$MetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.WDK.Win32Metadata" version="$WDKMetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.SDK.Win32Docs" version="$ApiDocsVersion$" include="buildTransitive" />
+			</group>
+			<group targetFramework=".NETStandard2.0">
+				<dependency id="Microsoft.Windows.SDK.Win32Metadata" version="$MetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.WDK.Win32Metadata" version="$WDKMetadataVersion$" include="buildTransitive" />
+				<dependency id="Microsoft.Windows.SDK.Win32Docs" version="$ApiDocsVersion$" include="buildTransitive" />
+			</group>
+		</dependencies>
+	</metadata>
+
+	<files>
+		<file src="$BaseOutputPath$Microsoft.Windows.SDK.Win32Docs.dll" target="analyzers\cs\Microsoft.Windows.SDK.Win32Docs.dll" />
+		<file src="$BaseOutputPath$CsWin32Ex.dll" target="analyzers\cs\CsWin32Ex.dll" />
+		<file src="$SignedOutputPath$MessagePack.dll" target="analyzers\cs\MessagePack.dll" />
+		<file src="$SignedOutputPath$MessagePack.Annotations.dll" target="analyzers\cs\MessagePack.Annotations.dll" />
+		<file src="$BaseOutputPath$Microsoft.Bcl.AsyncInterfaces.dll" target="analyzers\cs\Microsoft.Bcl.AsyncInterfaces.dll" />
+		<file src="$BaseOutputPath$System.Text.Json.dll" target="analyzers\cs\System.Text.Json.dll" />
+		<file src="$BaseOutputPath$System.Text.Encodings.Web.dll" target="analyzers\cs\System.Text.Encodings.Web.dll" />
+		<file src="readme.txt" target="readme.txt" />
+		<file src="..\..\README.md" target="README.md" />
+		<file src="..\..\NOTICE.txt" target="NOTICE.txt" />
+		<file src="build\**" target="build\" />
+		<file src="$SignedOutputPath$tools\*.ps1" target="tools\" />
+	</files>
+
+</package>
