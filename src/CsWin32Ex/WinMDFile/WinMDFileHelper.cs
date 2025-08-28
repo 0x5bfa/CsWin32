@@ -2,7 +2,7 @@
 
 namespace CsWin32Ex;
 
-internal static class MetadataUtilities
+internal static class WinMDFileHelper
 {
 	[Flags]
 	internal enum InteropArchitecture
@@ -16,32 +16,28 @@ internal static class MetadataUtilities
 #pragma warning restore SA1602 // Enumeration items should be documented
 	}
 
-	internal static bool IsCompatibleWithPlatform(MetadataReader mr, MetadataIndex index, Platform? platform, CustomAttributeHandleCollection customAttributesOnMember)
+	internal static bool IsCompatibleWithPlatform(MetadataReader reader, WinMDFileIndexer index, Platform? platform, CustomAttributeHandleCollection customAttributesOnMember)
 	{
+		// This metadata never uses the SupportedArchitectureAttribute, so we assume this member is compatible.
 		if (index.SupportedArchitectureAttributeCtor == default)
-		{
-			// This metadata never uses the SupportedArchitectureAttribute, so we assume this member is compatible.
 			return true;
-		}
 
-		foreach (CustomAttributeHandle attHandle in customAttributesOnMember)
+		// Without a compilation, we cannot check the platform compatibility.
+		if (platform is null)
+			return false;
+
+		foreach (CustomAttributeHandle attributeHandle in customAttributesOnMember)
 		{
-			CustomAttribute att = mr.GetCustomAttribute(attHandle);
-			if (att.Constructor.Equals(index.SupportedArchitectureAttributeCtor))
+			CustomAttribute attribute = reader.GetCustomAttribute(attributeHandle);
+			if (attribute.Constructor.Equals(index.SupportedArchitectureAttributeCtor))
 			{
-				if (platform is null)
-				{
-					// Without a compilation, we cannot ascertain compatibility.
-					return false;
-				}
-
-				var requiredPlatform = (InteropArchitecture)(int)att.DecodeValue(CustomAttributeTypeProvider.Instance).FixedArguments[0].Value!;
+				var requiredPlatform = (InteropArchitecture)(int)attribute.DecodeValue(CustomAttributeTypeProvider.Instance).FixedArguments[0].Value!;
 				return platform switch
 				{
-					Platform.AnyCpu or Platform.AnyCpu32BitPreferred => requiredPlatform == InteropArchitecture.All,
-					Platform.Arm64 => (requiredPlatform & InteropArchitecture.Arm64) == InteropArchitecture.Arm64,
-					Platform.X86 => (requiredPlatform & InteropArchitecture.X86) == InteropArchitecture.X86,
-					Platform.X64 => (requiredPlatform & InteropArchitecture.X64) == InteropArchitecture.X64,
+					Platform.AnyCpu or Platform.AnyCpu32BitPreferred => requiredPlatform is InteropArchitecture.All,
+					Platform.Arm64 => (requiredPlatform & InteropArchitecture.Arm64) is InteropArchitecture.Arm64,
+					Platform.X86 => (requiredPlatform & InteropArchitecture.X86) is InteropArchitecture.X86,
+					Platform.X64 => (requiredPlatform & InteropArchitecture.X64) is InteropArchitecture.X64,
 					_ => false,
 				};
 			}
@@ -54,14 +50,15 @@ internal static class MetadataUtilities
 	internal static bool IsAttribute(MetadataReader reader, CustomAttribute attribute, string ns, string name)
 	{
 		StringHandle actualNamespace, actualName;
-		if (attribute.Constructor.Kind == HandleKind.MemberReference)
+
+		if (attribute.Constructor.Kind is HandleKind.MemberReference)
 		{
 			MemberReference memberReference = reader.GetMemberReference((MemberReferenceHandle)attribute.Constructor);
 			TypeReference parentRef = reader.GetTypeReference((TypeReferenceHandle)memberReference.Parent);
 			actualNamespace = parentRef.Namespace;
 			actualName = parentRef.Name;
 		}
-		else if (attribute.Constructor.Kind == HandleKind.MethodDefinition)
+		else if (attribute.Constructor.Kind is HandleKind.MethodDefinition)
 		{
 			MethodDefinition methodDef = reader.GetMethodDefinition((MethodDefinitionHandle)attribute.Constructor);
 			TypeDefinition typeDef = reader.GetTypeDefinition(methodDef.GetDeclaringType());

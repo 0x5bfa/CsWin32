@@ -139,7 +139,7 @@ public partial class Generator
 			string methodName = this.Reader.GetString(methodDefinition.Name);
 			if (this.MetadataIndex.MetadataByNamespace[ns].MethodsForOtherPlatform.Contains(methodName))
 			{
-				throw new PlatformIncompatibleException($"Request for method ({methodName}) that is not available given the target platform.");
+				throw new PlatformIncompatibleException($"Request for method ({methodName}) that is not available given the target _buildPlatform.");
 			}
 		}
 

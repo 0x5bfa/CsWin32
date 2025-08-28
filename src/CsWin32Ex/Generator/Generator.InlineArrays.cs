@@ -324,7 +324,7 @@ public partial class Generator
 		if (this.canUseSpan && elementTypeIsEquatable)
 		{
 			// internal readonly bool Equals(ReadOnlySpan<TheStruct> value)
-			IdentifierNameSyntax valueParameterName = IdentifierName("value");
+			IdentifierNameSyntax valueParameterName = IdentifierName("_value");
 			MethodDeclarationSyntax equalsSpanMethod = MethodDeclaration(PredefinedType(Token(SyntaxKind.BoolKeyword)), Identifier(nameof(object.Equals)))
 				.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.ReadOnlyKeyword))
 				.AddParameterListParameters(
@@ -393,12 +393,12 @@ public partial class Generator
 				fixedLengthStruct = fixedLengthStruct.AddMembers(
 					MethodDeclaration(PredefinedType(Token(SyntaxKind.BoolKeyword)), Identifier("Equals"))
 						.AddModifiers(Token(this.Visibility), TokenWithSpace(SyntaxKind.ReadOnlyKeyword))
-						.AddParameterListParameters(Parameter(Identifier("value")).WithType(PredefinedType(TokenWithSpace(SyntaxKind.StringKeyword))))
+						.AddParameterListParameters(Parameter(Identifier("_value")).WithType(PredefinedType(TokenWithSpace(SyntaxKind.StringKeyword))))
 						.WithExpressionBody(ArrowExpressionClause(InvocationExpression(
 							IdentifierName("Equals"),
 							ArgumentList().AddArguments(Argument(
 								InvocationExpression(
-									MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName("value"), IdentifierName("AsSpan")),
+									MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName("_value"), IdentifierName("AsSpan")),
 									ArgumentList()))))))
 						.WithSemicolonToken(Token(SyntaxKind.SemicolonToken)));
 			}
@@ -577,8 +577,8 @@ public partial class Generator
 				fixedLengthStruct = fixedLengthStruct.AddMembers(
 					ConversionOperatorDeclaration(Token(SyntaxKind.ImplicitKeyword), fixedLengthStructName)
 						.AddModifiers(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword))
-						.AddParameterListParameters(Parameter(Identifier("value")).WithType(PredefinedType(Token(SyntaxKind.StringKeyword)).WithTrailingTrivia(TriviaList(Space))))
-						.WithExpressionBody(ArrowExpressionClause(InvocationExpression(MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName("value"), IdentifierName(nameof(MemoryExtensions.AsSpan))))))
+						.AddParameterListParameters(Parameter(Identifier("_value")).WithType(PredefinedType(Token(SyntaxKind.StringKeyword)).WithTrailingTrivia(TriviaList(Space))))
+						.WithExpressionBody(ArrowExpressionClause(InvocationExpression(MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName("_value"), IdentifierName(nameof(MemoryExtensions.AsSpan))))))
 						.WithSemicolonToken(Token(SyntaxKind.SemicolonToken)));
 			}
 
@@ -590,7 +590,7 @@ public partial class Generator
 		// public static implicit operator __TheStruct_64(ReadOnlySpan<TheStruct> value)
 		if (this.canUseSpan && !RequiresUnsafe(elementType))
 		{
-			IdentifierNameSyntax valueParam = IdentifierName("value");
+			IdentifierNameSyntax valueParam = IdentifierName("_value");
 			ConversionOperatorDeclarationSyntax implicitSpanToStruct =
 				ConversionOperatorDeclaration(Token(SyntaxKind.ImplicitKeyword), fixedLengthStructName)
 					.AddModifiers(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword))

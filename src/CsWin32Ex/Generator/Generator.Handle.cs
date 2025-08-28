@@ -371,10 +371,10 @@ public partial class Generator
 		foreach (CustomAttributeHandle ah in td.Definition.GetCustomAttributes())
 		{
 			CustomAttribute a = td.Reader.GetCustomAttribute(ah);
-			if (MetadataUtilities.IsAttribute(td.Reader, a, InteropDecorationNamespace, InvalidHandleValueAttribute))
+			if (WinMDFileHelper.IsAttribute(td.Reader, a, InteropDecorationNamespace, InvalidHandleValueAttribute))
 			{
 				CustomAttributeValue<TypeSyntax> attributeData = a.DecodeValue(CustomAttributeTypeProvider.Instance);
-				long invalidValue = (long)(attributeData.FixedArguments[0].Value ?? throw new GenerationFailedException("Missing invalid value attribute."));
+				long invalidValue = (long)(attributeData.FixedArguments[0].Value ?? throw new GenerationFailedException("Missing invalid _value attribute."));
 				invalidHandleValues.Add((IntPtr)invalidValue);
 			}
 		}
@@ -387,7 +387,7 @@ public partial class Generator
 		foreach (CustomAttributeHandle ah in typeDef.GetCustomAttributes())
 		{
 			CustomAttribute a = this.Reader.GetCustomAttribute(ah);
-			if (MetadataUtilities.IsAttribute(this.Reader, a, InteropDecorationNamespace, InvalidHandleValueAttribute))
+			if (WinMDFileHelper.IsAttribute(this.Reader, a, InteropDecorationNamespace, InvalidHandleValueAttribute))
 			{
 				return true;
 			}

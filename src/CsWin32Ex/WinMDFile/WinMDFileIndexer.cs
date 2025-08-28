@@ -5,43 +5,31 @@ using System.Collections.ObjectModel;
 
 namespace CsWin32Ex;
 
-/// <summary>
-/// A cached, shareable index into a particular metadata file.
-/// </summary>
-/// <devremarks>
-/// This class <em>must not</em> store anything to do with a <see cref="MetadataReader"/>,
-/// since that is attached to a stream which will not allow for concurrent use.
-/// This means we cannot store definitions (e.g. <see cref="TypeDefinition"/>)
-/// because they store the <see cref="MetadataReader"/> as a field.
-/// We can store handles though (e.g. <see cref="TypeDefinitionHandle"/>, since
-/// the only thing they store is an index into the metadata, which is constant across
-/// <see cref="MetadataReader"/> instances for a given metadata file.
-/// </devremarks>
-[DebuggerDisplay("{" + nameof(DebuggerDisplay) + ",nq}")]
-internal class MetadataIndex
+/// <summary>A cached, shareable indexer for a particular metadata file.</summary>
+/// <remarks> This class <em>must not</em> store anything to do with a <see cref="MetadataReader"/>, since that is attached to a stream which will not allow for concurrent use. This means we cannot store definitions (e.g. <see cref="TypeDefinition"/>) because they store the <see cref="MetadataReader"/> as a field. We can store handles though (e.g. <see cref="TypeDefinitionHandle"/>, since the only thing they store is an index into the metadata, which is constant across <see cref="MetadataReader"/> instances for a given metadata file.</remarks>
+[DebuggerDisplay($"{{{nameof(_winMDFile.Path)} ({nameof(_buildPlatform)}),nq}}")]
+internal class WinMDFileIndexer
 {
-	private static readonly int MaxPooledObjectCount = Math.Max(Environment.ProcessorCount, 4);
+	private readonly WinMDFile _winMDFile;
 
-	private readonly WinMDFile metadataFile;
+	private readonly Platform? _buildPlatform;
 
-	private readonly Platform? platform;
+	private readonly List<TypeDefinitionHandle> _apis = [];
 
-	private readonly List<TypeDefinitionHandle> apis = new();
+	private readonly HashSet<string> _releaseMethods = new(StringComparer.Ordinal);
 
-	private readonly HashSet<string> releaseMethods = new HashSet<string>(StringComparer.Ordinal);
-
-	private readonly ConcurrentDictionary<TypeReferenceHandle, TypeDefinitionHandle> refToDefCache = new();
+	private readonly ConcurrentDictionary<TypeReferenceHandle, TypeDefinitionHandle> _refToDefCache = new();
 
 	/// <summary>
 	/// The set of names of typedef structs that represent handles where the handle has length of <see cref="IntPtr"/>
 	/// and is therefore appropriate to wrap in a <see cref="SafeHandle"/>.
 	/// </summary>
-	private readonly HashSet<string> handleTypeStructsWithIntPtrSizeFields = new HashSet<string>(StringComparer.Ordinal);
+	private readonly HashSet<string> handleTypeStructsWithIntPtrSizeFields = new(StringComparer.Ordinal);
 
 	/// <summary>
 	/// A dictionary where the key is the typedef struct name and the value is the method used to release it.
 	/// </summary>
-	private readonly Dictionary<TypeDefinitionHandle, string> handleTypeReleaseMethod = new();
+	private readonly Dictionary<TypeDefinitionHandle, string> handleTypeReleaseMethod = [];
 
 	/// <summary>
 	/// A cache kept by the <see cref="TryGetEnumName"/> method.
@@ -55,18 +43,44 @@ internal class MetadataIndex
 	private TypeReferenceHandle? enumTypeReference;
 
 	/// <summary>
-	/// Initializes a new instance of the <see cref="MetadataIndex"/> class.
+	/// Gets the assembly name of the metadata file.
 	/// </summary>
-	/// <param name="metadataFile">The metadata file that this index will represent.</param>
-	/// <param name="platform">The platform filter to apply when reading the metadata.</param>
-	internal MetadataIndex(WinMDFile metadataFile, Platform? platform)
-	{
-		this.metadataFile = metadataFile;
-		this.platform = platform;
+	internal string MetadataName { get; }
 
-		using WinMDFile.WinMDReaderRental mrRental = metadataFile.RentWinMDReader();
+	/// <summary>
+	/// Gets the ref handle to the constructor on the SupportedArchitectureAttribute, if there is one.
+	/// </summary>
+	internal MemberReferenceHandle SupportedArchitectureAttributeCtor { get; }
+
+	/// <summary>
+	/// Gets the "Apis" classes across all namespaces.
+	/// </summary>
+	internal ReadOnlyCollection<TypeDefinitionHandle> Apis => new(_apis);
+
+	/// <summary>
+	/// Gets a dictionary of namespace metadata, indexed by the string handle to their namespace.
+	/// </summary>
+	internal Dictionary<string, NamespaceMetadata> MetadataByNamespace { get; } = new();
+
+	internal IReadOnlyCollection<string> ReleaseMethods => _releaseMethods;
+
+	internal IReadOnlyDictionary<TypeDefinitionHandle, string> HandleTypeReleaseMethod => handleTypeReleaseMethod;
+
+	internal string CommonNamespace { get; }
+
+	internal string CommonNamespaceDot { get; }
+
+	/// <summary>Initializes an instance of <see cref="WinMDFileIndexer"/>.</summary>
+	/// <param name="winMDFile">The metadata file that this index will represent.</param>
+	/// <param name="buildPlatform">The platform filter to apply when reading the metadata.</param>
+	internal WinMDFileIndexer(WinMDFile winMDFile, Platform? buildPlatform)
+	{
+		_winMDFile = winMDFile;
+		_buildPlatform = buildPlatform;
+
+		using WinMDReaderRental mrRental = winMDFile.RentWinMDReader();
 		MetadataReader mr = mrRental.Value;
-		this.MetadataName = Path.GetFileNameWithoutExtension(mr.GetString(mr.GetAssemblyDefinition().Name));
+		MetadataName = Path.GetFileNameWithoutExtension(mr.GetString(mr.GetAssemblyDefinition().Name));
 
 		foreach (MemberReferenceHandle memberRefHandle in mr.MemberReferences)
 		{
@@ -82,7 +96,7 @@ internal class MetadataIndex
 						if (mr.StringComparer.Equals(tr.Name, "SupportedArchitectureAttribute") &&
 							mr.StringComparer.Equals(tr.Namespace, Generator.InteropDecorationNamespace))
 						{
-							this.SupportedArchitectureAttributeCtor = memberRefHandle;
+							SupportedArchitectureAttributeCtor = memberRefHandle;
 							break;
 						}
 					}
@@ -103,12 +117,12 @@ internal class MetadataIndex
 				string typeName = mr.GetString(td.Name);
 				if (typeName == "Apis")
 				{
-					this.apis.Add(tdh);
+					_apis.Add(tdh);
 					foreach (MethodDefinitionHandle methodDefHandle in td.GetMethods())
 					{
 						MethodDefinition methodDef = mr.GetMethodDefinition(methodDefHandle);
 						string methodName = mr.GetString(methodDef.Name);
-						if (MetadataUtilities.IsCompatibleWithPlatform(mr, this, platform, methodDef.GetCustomAttributes()))
+						if (WinMDFileHelper.IsCompatibleWithPlatform(mr, this, buildPlatform, methodDef.GetCustomAttributes()))
 						{
 							nsMetadata.Methods.Add(methodName, methodDefHandle);
 						}
@@ -132,7 +146,7 @@ internal class MetadataIndex
 				else if (typeName == "<Module>")
 				{
 				}
-				else if (MetadataUtilities.IsCompatibleWithPlatform(mr, this, platform, td.GetCustomAttributes()))
+				else if (WinMDFileHelper.IsCompatibleWithPlatform(mr, this, buildPlatform, td.GetCustomAttributes()))
 				{
 					nsMetadata.Types.Add(typeName, tdh);
 
@@ -142,13 +156,13 @@ internal class MetadataIndex
 						TypeReference baseType = mr.GetTypeReference((TypeReferenceHandle)td.BaseType);
 						if (mr.StringComparer.Equals(baseType.Name, nameof(ValueType)) && mr.StringComparer.Equals(baseType.Namespace, nameof(System)))
 						{
-							if (MetadataUtilities.FindAttribute(mr, td.GetCustomAttributes(), Generator.InteropDecorationNamespace, Generator.RAIIFreeAttribute) is CustomAttribute att)
+							if (WinMDFileHelper.FindAttribute(mr, td.GetCustomAttributes(), Generator.InteropDecorationNamespace, Generator.RAIIFreeAttribute) is CustomAttribute att)
 							{
 								CustomAttributeValue<TypeSyntax> args = att.DecodeValue(CustomAttributeTypeProvider.Instance);
 								if (args.FixedArguments[0].Value is string freeMethodName)
 								{
-									this.handleTypeReleaseMethod.Add(tdh, freeMethodName);
-									this.releaseMethods.Add(freeMethodName);
+									handleTypeReleaseMethod.Add(tdh, freeMethodName);
+									_releaseMethods.Add(freeMethodName);
 
 									using FieldDefinitionHandleCollection.Enumerator fieldEnum = td.GetFields().GetEnumerator();
 									fieldEnum.MoveNext();
@@ -156,15 +170,15 @@ internal class MetadataIndex
 									FieldDefinition fieldDef = mr.GetFieldDefinition(fieldHandle);
 									if (fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null) is PrimitiveTypeHandleInfo { PrimitiveTypeCode: PrimitiveTypeCode.IntPtr or PrimitiveTypeCode.UIntPtr })
 									{
-										this.handleTypeStructsWithIntPtrSizeFields.Add(typeName);
+										handleTypeStructsWithIntPtrSizeFields.Add(typeName);
 									}
 								}
 							}
-							else if (this.MetadataName == "Windows.Win32" && typeName == "HGDIOBJ")
+							else if (MetadataName == "Windows.Win32" && typeName == "HGDIOBJ")
 							{
 								// This "base type" struct doesn't have an RAIIFree attribute,
 								// but methods that take an HGDIOBJ parameter are expected to offer SafeHandle friendly overloads.
-								this.handleTypeReleaseMethod.Add(tdh, "DeleteObject");
+								handleTypeReleaseMethod.Add(tdh, "DeleteObject");
 							}
 						}
 					}
@@ -177,7 +191,7 @@ internal class MetadataIndex
 
 			if (!nsMetadata.IsEmpty)
 			{
-				this.MetadataByNamespace.Add(nsFullName, nsMetadata);
+				MetadataByNamespace.Add(nsFullName, nsMetadata);
 			}
 
 			foreach (NamespaceDefinitionHandle childNsHandle in ns.NamespaceDefinitions)
@@ -191,47 +205,17 @@ internal class MetadataIndex
 			PopulateNamespace(mr.GetNamespaceDefinitionRoot(), parentNamespace: null);
 		}
 
-		this.CommonNamespace = CommonPrefix(this.MetadataByNamespace.Keys.ToList());
-		if (this.CommonNamespace[this.CommonNamespace.Length - 1] == '.')
+		CommonNamespace = CommonPrefix(MetadataByNamespace.Keys.ToList());
+		if (CommonNamespace[CommonNamespace.Length - 1] == '.')
 		{
-			this.CommonNamespaceDot = this.CommonNamespace;
-			this.CommonNamespace = this.CommonNamespace.Substring(0, this.CommonNamespace.Length - 1);
+			CommonNamespaceDot = CommonNamespace;
+			CommonNamespace = CommonNamespace[..^1];
 		}
 		else
 		{
-			this.CommonNamespaceDot = this.CommonNamespace + ".";
+			CommonNamespaceDot = CommonNamespace + ".";
 		}
 	}
-
-	/// <summary>
-	/// Gets the assembly name of the metadata file.
-	/// </summary>
-	internal string MetadataName { get; }
-
-	/// <summary>
-	/// Gets the ref handle to the constructor on the SupportedArchitectureAttribute, if there is one.
-	/// </summary>
-	internal MemberReferenceHandle SupportedArchitectureAttributeCtor { get; }
-
-	/// <summary>
-	/// Gets the "Apis" classes across all namespaces.
-	/// </summary>
-	internal ReadOnlyCollection<TypeDefinitionHandle> Apis => new(this.apis);
-
-	/// <summary>
-	/// Gets a dictionary of namespace metadata, indexed by the string handle to their namespace.
-	/// </summary>
-	internal Dictionary<string, NamespaceMetadata> MetadataByNamespace { get; } = new();
-
-	internal IReadOnlyCollection<string> ReleaseMethods => this.releaseMethods;
-
-	internal IReadOnlyDictionary<TypeDefinitionHandle, string> HandleTypeReleaseMethod => this.handleTypeReleaseMethod;
-
-	internal string CommonNamespace { get; }
-
-	internal string CommonNamespaceDot { get; }
-
-	private string DebuggerDisplay => $"{this.metadataFile.Path} ({this.platform})";
 
 	/// <summary>
 	/// Attempts to translate a <see cref="TypeReferenceHandle"/> to a <see cref="TypeDefinitionHandle"/>.
@@ -242,7 +226,7 @@ internal class MetadataIndex
 	/// <returns><see langword="true"/> if a TypeDefinition was found; otherwise <see langword="false"/>.</returns>
 	internal bool TryGetTypeDefHandle(MetadataReader reader, TypeReferenceHandle typeRefHandle, out TypeDefinitionHandle typeDefHandle)
 	{
-		if (this.refToDefCache.TryGetValue(typeRefHandle, out typeDefHandle))
+		if (_refToDefCache.TryGetValue(typeRefHandle, out typeDefHandle))
 		{
 			return !typeDefHandle.IsNil;
 		}
@@ -263,7 +247,7 @@ internal class MetadataIndex
 				TypeDefinition typeDef = reader.GetTypeDefinition(tdh);
 				if (typeDef.Name == typeRef.Name && typeDef.Namespace == typeRef.Namespace)
 				{
-					if (!MetadataUtilities.IsCompatibleWithPlatform(reader, this, this.platform, typeDef.GetCustomAttributes()))
+					if (!WinMDFileHelper.IsCompatibleWithPlatform(reader, this, _buildPlatform, typeDef.GetCustomAttributes()))
 					{
 						foundPlatformIncompatibleMatch = true;
 						continue;
@@ -295,11 +279,11 @@ internal class MetadataIndex
 			{
 				string ns = reader.GetString(typeRef.Namespace);
 				string name = reader.GetString(typeRef.Name);
-				throw new PlatformIncompatibleException($"{ns}.{name} is not declared for this platform.");
+				throw new PlatformIncompatibleException($"{ns}.{name} is not declared for this _buildPlatform.");
 			}
 		}
 
-		this.refToDefCache.TryAdd(typeRefHandle, typeDefHandle);
+		_refToDefCache.TryAdd(typeRefHandle, typeDefHandle);
 		return !typeDefHandle.IsNil;
 	}
 
@@ -312,13 +296,13 @@ internal class MetadataIndex
 	/// <returns><see langword="true"/> if a match was found; otherwise <see langword="false"/>.</returns>
 	internal bool TryGetEnumName(MetadataReader reader, string enumValueName, [NotNullWhen(true)] out string? declaringEnum)
 	{
-		if (this.enumValueLookupCache.TryGetValue(enumValueName, out declaringEnum))
+		if (enumValueLookupCache.TryGetValue(enumValueName, out declaringEnum))
 		{
 			return declaringEnum is not null;
 		}
 
 		// First find the type reference for System.Enum
-		TypeReferenceHandle? enumTypeRefHandle = this.FindEnumTypeReference(reader);
+		TypeReferenceHandle? enumTypeRefHandle = FindEnumTypeReference(reader);
 		if (enumTypeRefHandle is null)
 		{
 			// No enums -> it couldn't be what the caller is looking for.
@@ -353,14 +337,14 @@ internal class MetadataIndex
 				{
 					declaringEnum = reader.GetString(typeDef.Name);
 
-					this.enumValueLookupCache[enumValueName] = declaringEnum;
+					enumValueLookupCache[enumValueName] = declaringEnum;
 
 					return true;
 				}
 			}
 		}
 
-		this.enumValueLookupCache[enumValueName] = null;
+		enumValueLookupCache[enumValueName] = null;
 		declaringEnum = null;
 		return false;
 	}
@@ -402,26 +386,26 @@ internal class MetadataIndex
 	/// <returns>The <see cref="TypeReferenceHandle"/> if a reference to <see cref="Enum"/> was found; otherwise <see langword="null" />.</returns>
 	private TypeReferenceHandle? FindEnumTypeReference(MetadataReader reader)
 	{
-		if (!this.enumTypeReference.HasValue)
+		if (!enumTypeReference.HasValue)
 		{
 			foreach (TypeReferenceHandle typeRefHandle in reader.TypeReferences)
 			{
 				TypeReference typeRef = reader.GetTypeReference(typeRefHandle);
 				if (reader.StringComparer.Equals(typeRef.Name, nameof(Enum)) && reader.StringComparer.Equals(typeRef.Namespace, nameof(System)))
 				{
-					this.enumTypeReference = typeRefHandle;
+					enumTypeReference = typeRefHandle;
 					break;
 				}
 			}
 
-			if (!this.enumTypeReference.HasValue)
+			if (!enumTypeReference.HasValue)
 			{
 				// Record that there isn't one.
-				this.enumTypeReference = default(TypeReferenceHandle);
+				enumTypeReference = default(TypeReferenceHandle);
 			}
 		}
 
 		// Return null if the value was determined to be missing.
-		return this.enumTypeReference.HasValue && !this.enumTypeReference.Value.IsNil ? this.enumTypeReference.Value : null;
+		return enumTypeReference.HasValue && !enumTypeReference.Value.IsNil ? enumTypeReference.Value : null;
 	}
 }

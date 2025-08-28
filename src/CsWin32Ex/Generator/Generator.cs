@@ -34,7 +34,7 @@ public partial class Generator : IGenerator, IDisposable
 	private readonly StructDeclarationSyntax variableLengthInlineArrayStruct2;
 
 	private readonly Dictionary<string, IReadOnlyList<ISymbol>> findTypeSymbolIfAlreadyAvailableCache = new(StringComparer.Ordinal);
-	private readonly WinMDFile.WinMDReaderRental metadataReader;
+	private readonly WinMDReaderRental metadataReader;
 	private readonly GeneratorOptions options;
 	private readonly CSharpCompilation? compilation;
 	private readonly CSharpParseOptions? parseOptions;
@@ -77,7 +77,7 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal string InputAssemblyName => this.MetadataIndex.MetadataName;
 
-	internal MetadataIndex MetadataIndex { get; }
+	internal WinMDFileIndexer MetadataIndex { get; }
 
 	internal MetadataReader Reader => this.metadataReader.Value;
 
@@ -578,7 +578,7 @@ public partial class Generator : IGenerator, IDisposable
 
 		if (foundApiWithMismatchedPlatform)
 		{
-			throw new PlatformIncompatibleException($"The requested API ({possiblyQualifiedName}) was found but is not available given the target platform ({this.compilation?.Options.Platform}).");
+			throw new PlatformIncompatibleException($"The requested API ({possiblyQualifiedName}) was found but is not available given the target _buildPlatform ({this.compilation?.Options.Platform}).");
 		}
 
 		preciseApi = ImmutableList<string>.Empty;
@@ -902,7 +902,7 @@ public partial class Generator : IGenerator, IDisposable
 			NamespaceMetadata namespaceMetadata = this.MetadataIndex.MetadataByNamespace[ns];
 			if (!namespaceMetadata.Types.TryGetValue(name, out typeDefHandle) && namespaceMetadata.TypesForOtherPlatform.Contains(name))
 			{
-				throw new PlatformIncompatibleException($"Request for type ({ns}.{name}) that is not available given the target platform.");
+				throw new PlatformIncompatibleException($"Request for type ({ns}.{name}) that is not available given the target _buildPlatform.");
 			}
 		}
 
@@ -1318,7 +1318,7 @@ public partial class Generator : IGenerator, IDisposable
 		}
 	}
 
-	private bool IsCompatibleWithPlatform(CustomAttributeHandleCollection customAttributesOnMember) => MetadataUtilities.IsCompatibleWithPlatform(this.Reader, this.MetadataIndex, this.compilation?.Options.Platform, customAttributesOnMember);
+	private bool IsCompatibleWithPlatform(CustomAttributeHandleCollection customAttributesOnMember) => WinMDFileHelper.IsCompatibleWithPlatform(this.Reader, this.MetadataIndex, this.compilation?.Options.Platform, customAttributesOnMember);
 
 	private void TryGenerateTypeOrThrow(string possiblyQualifiedName)
 	{
@@ -1446,7 +1446,7 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		if (this.sliceAtNullMethodDecl is null)
 		{
-			IdentifierNameSyntax valueParam = IdentifierName("value");
+			IdentifierNameSyntax valueParam = IdentifierName("_value");
 			IdentifierNameSyntax lengthLocal = IdentifierName("length");
 			TypeSyntax charSpan = MakeReadOnlySpanOfT(PredefinedType(Token(SyntaxKind.CharKeyword)));
 

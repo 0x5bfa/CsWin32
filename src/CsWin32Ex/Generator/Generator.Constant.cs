@@ -299,7 +299,7 @@ public partial class Generator
 			targetTypeDefHandle.Generator.CreateConstantViaCtor(args, targetType, typeDef, out unsafeRequired) ??
 			targetTypeDefHandle.Generator.CreateConstantByField(args, targetType, typeDef, out unsafeRequired);
 
-		return result ?? throw new GenerationFailedException($"Unable to construct constant value given {args.Count} fields or constructor arguments.");
+		return result ?? throw new GenerationFailedException($"Unable to construct constant _value given {args.Count} fields or constructor arguments.");
 	}
 
 	private ExpressionSyntax CreateByteArrayConstant(ReadOnlyMemory<char> argsAsString)

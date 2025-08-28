@@ -69,7 +69,7 @@ public interface IGenerator : IDisposable
 	/// <param name="cancellationToken">A cancellation token.</param>
 	void GenerateAll(CancellationToken cancellationToken);
 
-	/// <inheritdoc cref="MetadataIndex.TryGetEnumName(MetadataReader, string, out string?)"/>
+	/// <inheritdoc cref="WinMDFileIndexer.TryGetEnumName(MetadataReader, string, out string?)"/>
 	bool TryGetEnumName(string enumValueName, [NotNullWhen(true)] out string? declaringEnum);
 
 	/// <summary>

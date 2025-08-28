@@ -19,7 +19,7 @@ public partial class Generator
 		}
 
 		// Add associated constants.
-		foreach (CustomAttribute associatedConstAtt in MetadataUtilities.FindAttributes(this.Reader, typeDef.GetCustomAttributes(), InteropDecorationNamespace, AssociatedConstantAttribute))
+		foreach (CustomAttribute associatedConstAtt in WinMDFileHelper.FindAttributes(this.Reader, typeDef.GetCustomAttributes(), InteropDecorationNamespace, AssociatedConstantAttribute))
 		{
 			CustomAttributeValue<TypeSyntax> decodedAttribute = associatedConstAtt.DecodeValue(CustomAttributeTypeProvider.Instance);
 			if (decodedAttribute.FixedArguments.Length >= 1 && decodedAttribute.FixedArguments[0].Value is string constName)

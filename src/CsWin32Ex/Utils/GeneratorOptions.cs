@@ -63,10 +63,8 @@ public record GeneratorOptions
 	/// <exception cref="InvalidOperationException">Thrown when some setting is invalid.</exception>
 	public void Validate()
 	{
-		if (string.IsNullOrWhiteSpace(this.ClassName))
-		{
+		if (string.IsNullOrWhiteSpace(ClassName))
 			throw new InvalidOperationException("The ClassName property must not be null or empty.");
-		}
 	}
 
 	/// <summary>

@@ -32,7 +32,7 @@ public partial class Generator
 		if (typeDef.GetFields().LastOrDefault() is FieldDefinitionHandle { IsNil: false } lastFieldHandle)
 		{
 			FieldDefinition lastField = this.Reader.GetFieldDefinition(lastFieldHandle);
-			if (MetadataUtilities.FindAttribute(this.Reader, lastField.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
+			if (WinMDFileHelper.FindAttribute(this.Reader, lastField.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
 			{
 				flexibleArrayFieldHandle = lastFieldHandle;
 				context = context with { AllowMarshaling = false };
@@ -173,7 +173,7 @@ public partial class Generator
 							.AddModifiers(TokenWithSpace(this.Visibility))
 							.WithAccessorList(AccessorList().AddAccessors(
 								AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(CastExpression(propertyType, fieldAccess))).WithSemicolonToken(Semicolon),
-								AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, fieldAccess, CastExpression(fieldInfo.FieldType, IdentifierName("value"))))).WithSemicolonToken(Semicolon)));
+								AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, fieldAccess, CastExpression(fieldInfo.FieldType, IdentifierName("_value"))))).WithSemicolonToken(Semicolon)));
 						additionalMembers = additionalMembers.Add(property);
 					}
 					else
@@ -212,7 +212,7 @@ public partial class Generator
 
 				members.Add(field);
 
-				foreach (CustomAttribute bitfieldAttribute in MetadataUtilities.FindAttributes(this.Reader, fieldDef.GetCustomAttributes(), InteropDecorationNamespace, NativeBitfieldAttribute))
+				foreach (CustomAttribute bitfieldAttribute in WinMDFileHelper.FindAttributes(this.Reader, fieldDef.GetCustomAttributes(), InteropDecorationNamespace, NativeBitfieldAttribute))
 				{
 					var fieldTypeInfo = (PrimitiveTypeHandleInfo)fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null);
 
@@ -302,7 +302,7 @@ public partial class Generator
 							.WithExpressionBody(ArrowExpressionClause(getterExpression))
 							.WithSemicolonToken(SemicolonWithLineFeed);
 
-						IdentifierNameSyntax valueName = IdentifierName("value");
+						IdentifierNameSyntax valueName = IdentifierName("_value");
 
 						List<StatementSyntax> setterStatements = new();
 						if (propertyBitLength > propLength)
@@ -356,7 +356,7 @@ public partial class Generator
 										fieldType,
 										ParenthesizedExpression(
 											ConditionalExpression(
-												IdentifierName("value"),
+												IdentifierName("_value"),
 												BinaryExpression(SyntaxKind.BitwiseOrExpression, fieldAccess, maskExpr),
 												fieldAndNotMask))))))
 							.WithSemicolonToken(SemicolonWithLineFeed);
@@ -453,7 +453,7 @@ public partial class Generator
 						ExpressionStatement(AssignmentExpression(
 							SyntaxKind.SimpleAssignmentExpression,
 							PrefixUnaryExpression(SyntaxKind.PointerIndirectionExpression, ParenthesizedExpression(BinaryExpression(SyntaxKind.AddExpression, pLocal, IdentifierName("index")))),
-							IdentifierName("value"))))))
+							IdentifierName("_value"))))))
 				.AddAttributeLists(AttributeList().AddAttributes(MethodImpl(MethodImplOptions.AggressiveInlining)));
 
 			////internal unsafe T this[int index]

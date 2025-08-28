@@ -15,7 +15,7 @@ public partial class Generator
 		=> this.FindAttribute(customAttributeHandles, InteropDecorationNamespace, attributeName);
 
 	internal CustomAttribute? FindAttribute(CustomAttributeHandleCollection? customAttributeHandles, string attributeNamespace, string attributeName)
-		=> MetadataUtilities.FindAttribute(this.Reader, customAttributeHandles, attributeNamespace, attributeName);
+		=> WinMDFileHelper.FindAttribute(this.Reader, customAttributeHandles, attributeNamespace, attributeName);
 
 	internal IdentifierNameSyntax? FindAssociatedEnum(CustomAttributeHandleCollection? customAttributeHandles)
 	{
@@ -196,7 +196,7 @@ public partial class Generator
 		foreach (FieldDefinitionHandle fieldHandle in typeDef.GetFields())
 		{
 			FieldDefinition field = this.Reader.GetFieldDefinition(fieldHandle);
-			if (MetadataUtilities.FindAttribute(this.Reader, field.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
+			if (WinMDFileHelper.FindAttribute(this.Reader, field.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
 			{
 				return true;
 			}
@@ -615,7 +615,7 @@ public partial class Generator
 
 		if (foundApiWithMismatchedPlatform)
 		{
-			throw new PlatformIncompatibleException($"The requested API ({methodName}) was found but is not available given the target platform ({this.compilation?.Options.Platform}).");
+			throw new PlatformIncompatibleException($"The requested API ({methodName}) was found but is not available given the target _buildPlatform ({this.compilation?.Options.Platform}).");
 		}
 
 		return null;

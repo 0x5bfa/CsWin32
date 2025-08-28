@@ -227,7 +227,7 @@ public partial class Generator
 						break;
 					case SyntaxKind.SetAccessorDeclaration:
 						// vtblInvoke(pThis, value).ThrowOnFailure();
-						vtblInvocationStatement = ThrowOnHRFailure(vtblInvocation.WithArgumentList(ArgumentList().AddArguments(Argument(pThis), Argument(IdentifierName("value")))));
+						vtblInvocationStatement = ThrowOnHRFailure(vtblInvocation.WithArgumentList(ArgumentList().AddArguments(Argument(pThis), Argument(IdentifierName("_value")))));
 						body = Block().AddStatements(vtblInvocationStatement);
 						break;
 					default:
@@ -818,7 +818,7 @@ public partial class Generator
 				.AddVariables(VariableDeclarator(iidGuidFieldName.Identifier).WithInitializer(EqualsValueClause(
 					GuidValue(guidAttribute.Value)))))
 				.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.StaticKeyword), TokenWithSpace(SyntaxKind.ReadOnlyKeyword))
-				.WithLeadingTrivia(ParseLeadingTrivia($"/// <summary>The IID guid for this interface.</summary>\n/// <value>{guidAttributeValue:B}</value>\n")));
+				.WithLeadingTrivia(ParseLeadingTrivia($"/// <summary>The IID guid for this interface.</summary>\n/// <_value>{guidAttributeValue:B}</_value>\n")));
 
 			if (this.TryDeclareCOMGuidInterfaceIfNecessary())
 			{
