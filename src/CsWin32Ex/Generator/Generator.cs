@@ -75,7 +75,7 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal GeneratorOptions Options => this.options;
 
-	internal string InputAssemblyName => this.MetadataIndex.MetadataName;
+	internal string InputAssemblyName => this.MetadataIndex.WinMDAssemblyName;
 
 	internal WinMDFileIndexer MetadataIndex { get; }
 
@@ -96,7 +96,7 @@ public partial class Generator : IGenerator, IDisposable
 
 	private SyntaxKind Visibility => this.options.Public ? SyntaxKind.PublicKeyword : SyntaxKind.InternalKeyword;
 
-	private bool IsWin32Sdk => string.Equals(this.MetadataIndex.MetadataName, "Windows.Win32", StringComparison.OrdinalIgnoreCase);
+	private bool IsWin32Sdk => string.Equals(this.MetadataIndex.WinMDAssemblyName, "Windows.Win32", StringComparison.OrdinalIgnoreCase);
 
 	private IEnumerable<MemberDeclarationSyntax> NamespaceMembers
 	{
@@ -578,7 +578,7 @@ public partial class Generator : IGenerator, IDisposable
 
 		if (foundApiWithMismatchedPlatform)
 		{
-			throw new PlatformIncompatibleException($"The requested API ({possiblyQualifiedName}) was found but is not available given the target _buildPlatform ({this.compilation?.Options.Platform}).");
+			throw new PlatformIncompatibleException($"The requested API ({possiblyQualifiedName}) was found but is not available given the target platform ({this.compilation?.Options.Platform}).");
 		}
 
 		preciseApi = ImmutableList<string>.Empty;
@@ -847,9 +847,9 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal bool TryStripCommonNamespace(string fullNamespace, [NotNullWhen(true)] out string? strippedNamespace)
 	{
-		if (fullNamespace.StartsWith(this.MetadataIndex.CommonNamespaceDot, StringComparison.Ordinal))
+		if (fullNamespace.StartsWith(this.MetadataIndex.CommonNamespaceWithDot, StringComparison.Ordinal))
 		{
-			strippedNamespace = fullNamespace.Substring(this.MetadataIndex.CommonNamespaceDot.Length);
+			strippedNamespace = fullNamespace.Substring(this.MetadataIndex.CommonNamespaceWithDot.Length);
 			return true;
 		}
 		else if (fullNamespace == this.MetadataIndex.CommonNamespace)
@@ -902,7 +902,7 @@ public partial class Generator : IGenerator, IDisposable
 			NamespaceMetadata namespaceMetadata = this.MetadataIndex.MetadataByNamespace[ns];
 			if (!namespaceMetadata.Types.TryGetValue(name, out typeDefHandle) && namespaceMetadata.TypesForOtherPlatform.Contains(name))
 			{
-				throw new PlatformIncompatibleException($"Request for type ({ns}.{name}) that is not available given the target _buildPlatform.");
+				throw new PlatformIncompatibleException($"Request for type ({ns}.{name}) that is not available given the target platform.");
 			}
 		}
 
@@ -1446,7 +1446,7 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		if (this.sliceAtNullMethodDecl is null)
 		{
-			IdentifierNameSyntax valueParam = IdentifierName("_value");
+			IdentifierNameSyntax valueParam = IdentifierName("value");
 			IdentifierNameSyntax lengthLocal = IdentifierName("length");
 			TypeSyntax charSpan = MakeReadOnlySpanOfT(PredefinedType(Token(SyntaxKind.CharKeyword)));
 

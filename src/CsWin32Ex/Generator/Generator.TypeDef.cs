@@ -110,7 +110,7 @@ public partial class Generator
 
 		members = members.AddRange(this.CreateCommonTypeDefMembers(name, fieldType.Type, fieldIdentifierName));
 
-		IdentifierNameSyntax valueParameter = IdentifierName("_value");
+		IdentifierNameSyntax valueParameter = IdentifierName("value");
 		MemberAccessExpressionSyntax fieldAccessExpression = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), fieldIdentifierName);
 
 		if (isHandle && this.IsSafeHandleCompatibleTypeDefFieldType(fieldTypeInfo) && fieldTypeInfo is not PrimitiveTypeHandleInfo { PrimitiveTypeCode: PrimitiveTypeCode.IntPtr })
@@ -252,7 +252,7 @@ public partial class Generator
 	private IEnumerable<MemberDeclarationSyntax> CreateCommonTypeDefMembers(IdentifierNameSyntax structName, TypeSyntax fieldType, IdentifierNameSyntax fieldName)
 	{
 		// Add constructor
-		IdentifierNameSyntax valueParameter = IdentifierName("_value");
+		IdentifierNameSyntax valueParameter = IdentifierName("value");
 		MemberAccessExpressionSyntax fieldAccessExpression = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), fieldName);
 		yield return ConstructorDeclaration(structName.Identifier)
 			.AddModifiers(TokenWithSpace(this.Visibility))

@@ -374,7 +374,7 @@ public partial class Generator
 			if (WinMDFileHelper.IsAttribute(td.Reader, a, InteropDecorationNamespace, InvalidHandleValueAttribute))
 			{
 				CustomAttributeValue<TypeSyntax> attributeData = a.DecodeValue(CustomAttributeTypeProvider.Instance);
-				long invalidValue = (long)(attributeData.FixedArguments[0].Value ?? throw new GenerationFailedException("Missing invalid _value attribute."));
+				long invalidValue = (long)(attributeData.FixedArguments[0].Value ?? throw new GenerationFailedException("Missing invalid value attribute."));
 				invalidHandleValues.Add((IntPtr)invalidValue);
 			}
 		}

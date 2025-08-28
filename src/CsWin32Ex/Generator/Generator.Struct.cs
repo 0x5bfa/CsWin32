@@ -173,7 +173,7 @@ public partial class Generator
 							.AddModifiers(TokenWithSpace(this.Visibility))
 							.WithAccessorList(AccessorList().AddAccessors(
 								AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(CastExpression(propertyType, fieldAccess))).WithSemicolonToken(Semicolon),
-								AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, fieldAccess, CastExpression(fieldInfo.FieldType, IdentifierName("_value"))))).WithSemicolonToken(Semicolon)));
+								AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, fieldAccess, CastExpression(fieldInfo.FieldType, IdentifierName("value"))))).WithSemicolonToken(Semicolon)));
 						additionalMembers = additionalMembers.Add(property);
 					}
 					else
@@ -302,7 +302,7 @@ public partial class Generator
 							.WithExpressionBody(ArrowExpressionClause(getterExpression))
 							.WithSemicolonToken(SemicolonWithLineFeed);
 
-						IdentifierNameSyntax valueName = IdentifierName("_value");
+						IdentifierNameSyntax valueName = IdentifierName("value");
 
 						List<StatementSyntax> setterStatements = new();
 						if (propertyBitLength > propLength)
@@ -356,7 +356,7 @@ public partial class Generator
 										fieldType,
 										ParenthesizedExpression(
 											ConditionalExpression(
-												IdentifierName("_value"),
+												IdentifierName("value"),
 												BinaryExpression(SyntaxKind.BitwiseOrExpression, fieldAccess, maskExpr),
 												fieldAndNotMask))))))
 							.WithSemicolonToken(SemicolonWithLineFeed);
@@ -453,7 +453,7 @@ public partial class Generator
 						ExpressionStatement(AssignmentExpression(
 							SyntaxKind.SimpleAssignmentExpression,
 							PrefixUnaryExpression(SyntaxKind.PointerIndirectionExpression, ParenthesizedExpression(BinaryExpression(SyntaxKind.AddExpression, pLocal, IdentifierName("index")))),
-							IdentifierName("_value"))))))
+							IdentifierName("value"))))))
 				.AddAttributeLists(AttributeList().AddAttributes(MethodImpl(MethodImplOptions.AggressiveInlining)));
 
 			////internal unsafe T this[int index]

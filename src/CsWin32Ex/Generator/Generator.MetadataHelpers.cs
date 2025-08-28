@@ -615,7 +615,7 @@ public partial class Generator
 
 		if (foundApiWithMismatchedPlatform)
 		{
-			throw new PlatformIncompatibleException($"The requested API ({methodName}) was found but is not available given the target _buildPlatform ({this.compilation?.Options.Platform}).");
+			throw new PlatformIncompatibleException($"The requested API ({methodName}) was found but is not available given the target platform ({this.compilation?.Options.Platform}).");
 		}
 
 		return null;
