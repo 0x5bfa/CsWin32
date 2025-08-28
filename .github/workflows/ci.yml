@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  actions: read
+  checks: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -25,3 +29,13 @@ jobs:
 
     - name: Run the tests
       run: dotnet test
+
+    - name: Report the test results
+      uses: dorny/test-reporter@v1
+      with:
+        name: Summary Tests
+        path: "**/*.trx"
+        reporter: dotnet-trx
+        only-summary: true
+        list-suites: 'failed'
+        list-tests: 'failed'
