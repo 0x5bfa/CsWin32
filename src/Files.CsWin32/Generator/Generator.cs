@@ -1,5 +1,7 @@
 ﻿// Copyright (c) 0x5BFA.
 
+using System.Dynamic;
+
 namespace Files.CsWin32;
 
 /// <summary>
@@ -47,212 +49,6 @@ public partial class Generator : IGenerator, IDisposable
 	private readonly HashSet<string> injectedPInvokeMacros = new();
 	private readonly Dictionary<TypeDefinitionHandle, bool> managedTypesCheck = new();
 	private MethodDeclarationSyntax? sliceAtNullMethodDecl;
-
-	static Generator()
-	{
-		if (!TryFetchTemplate("PInvokeClassHelperMethods", null, out MemberDeclarationSyntax? member))
-		{
-			throw new GenerationFailedException("Missing embedded resource.");
-		}
-
-		PInvokeHelperMethods = ((ClassDeclarationSyntax)member).Members.OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m);
-
-		if (!TryFetchTemplate("PInvokeClassMacros", null, out member))
-		{
-			throw new GenerationFailedException("Missing embedded resource.");
-		}
-
-		Win32SdkMacros = ((ClassDeclarationSyntax)member).Members.OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m);
-
-		FetchTemplate("IVTable", null, out IVTableInterface);
-		FetchTemplate("IVTable`2", null, out IVTableGenericInterface);
-	}
-
-	/// <summary>
-	/// Initializes a new instance of the <see cref="Generator"/> class.
-	/// </summary>
-	/// <param name="metadataLibraryPath">The path to the winmd metadata to generate APIs from.</param>
-	/// <param name="docs">The API docs to include in the generated code.</param>
-	/// <param name="additionalAppLocalLibraries">The library file names (e.g. some.dll) that should be allowed as app-local.</param>
-	/// <param name="options">Options that influence the result of generation.</param>
-	/// <param name="compilation">The compilation that the generated code will be added to.</param>
-	/// <param name="parseOptions">The parse options that will be used for the generated code.</param>
-	public Generator(string metadataLibraryPath, Docs? docs, IEnumerable<string> additionalAppLocalLibraries, GeneratorOptions options, CSharpCompilation? compilation = null, CSharpParseOptions? parseOptions = null)
-	{
-		if (options is null)
-		{
-			throw new ArgumentNullException(nameof(options));
-		}
-
-		MetadataFile metadataFile = MetadataCache.Default.GetMetadataFile(metadataLibraryPath);
-		this.MetadataIndex = metadataFile.GetMetadataIndex(compilation?.Options.Platform);
-		this.metadataReader = metadataFile.GetMetadataReader();
-
-		this.ApiDocs = docs;
-
-		this.AppLocalLibraries = new(BuiltInAppLocalLibraries, StringComparer.OrdinalIgnoreCase);
-		this.AppLocalLibraries.UnionWith(additionalAppLocalLibraries);
-
-		this.options = options;
-		this.options.Validate();
-		this.compilation = compilation;
-		this.parseOptions = parseOptions;
-		this.volatileCode = new(this.committedCode);
-
-		// UnscopedRefAttribute may be emitted to work on downlevel *runtimes*, but we can't use it
-		// on downlevel *compilers*. Only .NET 8+ SDK compilers support it. Since we cannot detect
-		// compiler version, we use language version instead.
-		this.canUseUnscopedRef = this.parseOptions?.LanguageVersion >= (LanguageVersion)1100; // C# 11.0
-
-		this.canUseSpan = this.compilation?.GetTypeByMetadataName(typeof(Span<>).FullName) is not null;
-		this.canCallCreateSpan = this.compilation?.GetTypeByMetadataName(typeof(MemoryMarshal).FullName)?.GetMembers("CreateSpan").Any() is true;
-		this.canUseUnsafeAsRef = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("Add").Any() is true;
-		this.canUseUnsafeAdd = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("AsRef").Any() is true;
-		this.canUseUnsafeNullRef = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("NullRef").Any() is true;
-		this.canUseUnsafeSkipInit = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("SkipInit").Any() is true;
-		this.canUseUnmanagedCallersOnlyAttribute = this.FindTypeSymbolsIfAlreadyAvailable("System.Runtime.InteropServices.UnmanagedCallersOnlyAttribute").Count > 0;
-		this.canUseSetLastPInvokeError = this.compilation?.GetTypeByMetadataName("System.Runtime.InteropServices.Marshal")?.GetMembers("GetLastSystemError").IsEmpty is false;
-		this.unscopedRefAttributePredefined = this.FindTypeSymbolIfAlreadyAvailable("System.Diagnostics.CodeAnalysis.UnscopedRefAttribute") is not null;
-		this.overloadResolutionPriorityAttributePredefined = this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute") is not null;
-		this.runtimeFeatureClass = (INamedTypeSymbol?)this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.CompilerServices.RuntimeFeature");
-		this.comIIDInterfacePredefined = this.FindTypeSymbolIfAlreadyAvailable($"{this.Namespace}.{IComIIDGuidInterfaceName}") is not null;
-		this.getDelegateForFunctionPointerGenericExists = this.compilation?.GetTypeByMetadataName(typeof(Marshal).FullName)?.GetMembers(nameof(Marshal.GetDelegateForFunctionPointer)).Any(m => m is IMethodSymbol { IsGenericMethod: true }) is true;
-		this.generateDefaultDllImportSearchPathsAttribute = this.compilation?.GetTypeByMetadataName(typeof(DefaultDllImportSearchPathsAttribute).FullName) is object;
-		if (this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.Versioning.SupportedOSPlatformAttribute") is { } attribute)
-		{
-			this.generateSupportedOSPlatformAttributes = true;
-			AttributeData usageAttribute = attribute.GetAttributes().Single(att => att.AttributeClass?.Name == nameof(AttributeUsageAttribute));
-			var targets = (AttributeTargets)usageAttribute.ConstructorArguments[0].Value!;
-			this.generateSupportedOSPlatformAttributesOnInterfaces = (targets & AttributeTargets.Interface) == AttributeTargets.Interface;
-		}
-
-		// Convert some of our CanUse fields to preprocessor symbols so our templates can use them.
-		if (this.parseOptions is not null)
-		{
-			List<string> extraSymbols = new();
-			AddSymbolIf(this.canUseSpan, "canUseSpan");
-			AddSymbolIf(this.canCallCreateSpan, "canCallCreateSpan");
-			AddSymbolIf(this.canUseUnsafeAsRef, "canUseUnsafeAsRef");
-			AddSymbolIf(this.canUseUnsafeAdd, "canUseUnsafeAdd");
-			AddSymbolIf(this.canUseUnsafeNullRef, "canUseUnsafeNullRef");
-			AddSymbolIf(compilation?.GetTypeByMetadataName("System.Drawing.Point") is not null, "canUseSystemDrawing");
-			AddSymbolIf(this.IsFeatureAvailable(Feature.InterfaceStaticMembers), "canUseInterfaceStaticMembers");
-			AddSymbolIf(this.canUseUnscopedRef, "canUseUnscopedRef");
-
-			if (extraSymbols.Count > 0)
-			{
-				this.parseOptions = this.parseOptions.WithPreprocessorSymbols(this.parseOptions.PreprocessorSymbolNames.Concat(extraSymbols));
-			}
-
-			void AddSymbolIf(bool condition, string symbol)
-			{
-				if (condition)
-				{
-					extraSymbols.Add(symbol);
-				}
-			}
-		}
-
-		bool useComInterfaces = options.AllowMarshaling;
-		this.generalTypeSettings = new TypeSyntaxSettings(
-			this,
-			PreferNativeInt: this.LanguageVersion >= LanguageVersion.CSharp9,
-			PreferMarshaledTypes: false,
-			AllowMarshaling: options.AllowMarshaling,
-			QualifyNames: false);
-		this.fieldTypeSettings = this.generalTypeSettings with { QualifyNames = true, IsField = true };
-		this.delegateSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true };
-		this.enumTypeSettings = this.generalTypeSettings;
-		this.fieldOfHandleTypeDefTypeSettings = this.generalTypeSettings with { PreferNativeInt = false };
-		this.externSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true, PreferMarshaledTypes = options.AllowMarshaling };
-		this.externReleaseSignatureTypeSettings = this.externSignatureTypeSettings with { PreferNativeInt = false, PreferMarshaledTypes = false };
-		this.comSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true, PreferInOutRef = options.AllowMarshaling };
-		this.extensionMethodSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true };
-		this.functionPointerTypeSettings = this.generalTypeSettings with { QualifyNames = true, AvoidWinmdRootAlias = true, AllowMarshaling = false };
-		this.errorMessageTypeSettings = this.generalTypeSettings with { QualifyNames = true, Generator = null }; // Avoid risk of infinite recursion from errors in ToTypeSyntax
-
-		this.methodsAndConstantsClassName = IdentifierName(options.ClassName);
-
-		FetchTemplate("ComHelpers", this, out this.comHelperClass);
-		FetchTemplate("VariableLengthInlineArray`1", this, out this.variableLengthInlineArrayStruct1);
-		FetchTemplate("VariableLengthInlineArray`2", this, out this.variableLengthInlineArrayStruct2);
-	}
-
-	internal enum GeneratingElement
-	{
-		/// <summary>
-		/// Any other member that isn't otherwise enumerated.
-		/// </summary>
-		Other,
-
-		/// <summary>
-		/// A member on a COM interface that is actually being generated as an interface (as opposed to a struct for no-marshal COM).
-		/// </summary>
-		InterfaceMember,
-
-		/// <summary>
-		/// A member on a COM interface that is declared as a struct instead of an interface to avoid the marshaler.
-		/// </summary>
-		InterfaceAsStructMember,
-
-		/// <summary>
-		/// A delegate.
-		/// </summary>
-		Delegate,
-
-		/// <summary>
-		/// An extern, static method.
-		/// </summary>
-		ExternMethod,
-
-		/// <summary>
-		/// A property on a COM interface or struct.
-		/// </summary>
-		Property,
-
-		/// <summary>
-		/// A field on a struct.
-		/// </summary>
-		Field,
-
-		/// <summary>
-		/// A constant value.
-		/// </summary>
-		Constant,
-
-		/// <summary>
-		/// A function pointer.
-		/// </summary>
-		FunctionPointer,
-
-		/// <summary>
-		/// An enum value.
-		/// </summary>
-		EnumValue,
-
-		/// <summary>
-		/// A friendly overload.
-		/// </summary>
-		FriendlyOverload,
-
-		/// <summary>
-		/// A member on a helper class (e.g. a SafeHandle-derived class).
-		/// </summary>
-		HelperClassMember,
-
-		/// <summary>
-		/// A member of a struct that does <em>not</em> stand for a COM interface.
-		/// </summary>
-		StructMember,
-	}
-
-	private enum Feature
-	{
-		/// <summary>
-		/// Indicates that interfaces can declare static members. This requires at least .NET 7 and C# 11.
-		/// </summary>
-		InterfaceStaticMembers,
-	}
 
 	internal ImmutableDictionary<string, string> BannedAPIs => GetBannedAPIs(this.options);
 
@@ -360,6 +156,131 @@ public partial class Generator : IGenerator, IDisposable
 	}
 
 	private string DebuggerDisplayString => $"Generator: {this.InputAssemblyName}";
+
+	static Generator()
+	{
+		if (!TryFetchTemplate("PInvokeClassHelperMethods", null, out MemberDeclarationSyntax? member))
+		{
+			throw new GenerationFailedException("Missing embedded resource.");
+		}
+
+		PInvokeHelperMethods = ((ClassDeclarationSyntax)member).Members.OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m);
+
+		if (!TryFetchTemplate("PInvokeClassMacros", null, out member))
+		{
+			throw new GenerationFailedException("Missing embedded resource.");
+		}
+
+		Win32SdkMacros = ((ClassDeclarationSyntax)member).Members.OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m);
+
+		FetchTemplate("IVTable", null, out IVTableInterface);
+		FetchTemplate("IVTable`2", null, out IVTableGenericInterface);
+	}
+
+	/// <summary>
+	/// Initializes a new instance of the <see cref="Generator"/> class.
+	/// </summary>
+	/// <param name="metadataLibraryPath">The path to the winmd metadata to generate APIs from.</param>
+	/// <param name="docs">The API docs to include in the generated code.</param>
+	/// <param name="additionalAppLocalLibraries">The library file names (e.g. some.dll) that should be allowed as app-local.</param>
+	/// <param name="options">Options that influence the result of generation.</param>
+	/// <param name="compilation">The compilation that the generated code will be added to.</param>
+	/// <param name="parseOptions">The parse options that will be used for the generated code.</param>
+	public Generator(string metadataLibraryPath, Docs? docs, IEnumerable<string> additionalAppLocalLibraries, GeneratorOptions options, CSharpCompilation? compilation = null, CSharpParseOptions? parseOptions = null)
+	{
+		MetadataFile metadataFile = MetadataCache.Default.GetMetadataFile(metadataLibraryPath);
+		this.MetadataIndex = metadataFile.GetMetadataIndex(compilation?.Options.Platform);
+		this.metadataReader = metadataFile.GetMetadataReader();
+
+		this.ApiDocs = docs;
+
+		this.AppLocalLibraries = new(BuiltInAppLocalLibraries, StringComparer.OrdinalIgnoreCase);
+		this.AppLocalLibraries.UnionWith(additionalAppLocalLibraries);
+
+		this.options = options;
+		this.options.Validate();
+		this.compilation = compilation;
+		this.parseOptions = parseOptions;
+		this.volatileCode = new(this.committedCode);
+
+		// UnscopedRefAttribute may be emitted to work on downlevel *runtimes*, but we can't use it
+		// on downlevel *compilers*. Only .NET 8+ SDK compilers support it. Since we cannot detect
+		// compiler version, we use language version instead.
+		this.canUseUnscopedRef = this.parseOptions?.LanguageVersion >= (LanguageVersion)1100; // C# 11.0
+
+		this.canUseSpan = this.compilation?.GetTypeByMetadataName(typeof(Span<>).FullName) is not null;
+		this.canCallCreateSpan = this.compilation?.GetTypeByMetadataName(typeof(MemoryMarshal).FullName)?.GetMembers("CreateSpan").Any() is true;
+		this.canUseUnsafeAsRef = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("Add").Any() is true;
+		this.canUseUnsafeAdd = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("AsRef").Any() is true;
+		this.canUseUnsafeNullRef = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("NullRef").Any() is true;
+		this.canUseUnsafeSkipInit = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("SkipInit").Any() is true;
+		this.canUseUnmanagedCallersOnlyAttribute = this.FindTypeSymbolsIfAlreadyAvailable("System.Runtime.InteropServices.UnmanagedCallersOnlyAttribute").Count > 0;
+		this.canUseSetLastPInvokeError = this.compilation?.GetTypeByMetadataName("System.Runtime.InteropServices.Marshal")?.GetMembers("GetLastSystemError").IsEmpty is false;
+		this.unscopedRefAttributePredefined = this.FindTypeSymbolIfAlreadyAvailable("System.Diagnostics.CodeAnalysis.UnscopedRefAttribute") is not null;
+		this.overloadResolutionPriorityAttributePredefined = this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute") is not null;
+		this.runtimeFeatureClass = (INamedTypeSymbol?)this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.CompilerServices.RuntimeFeature");
+		this.comIIDInterfacePredefined = this.FindTypeSymbolIfAlreadyAvailable($"{this.Namespace}.{IComIIDGuidInterfaceName}") is not null;
+		this.getDelegateForFunctionPointerGenericExists = this.compilation?.GetTypeByMetadataName(typeof(Marshal).FullName)?.GetMembers(nameof(Marshal.GetDelegateForFunctionPointer)).Any(m => m is IMethodSymbol { IsGenericMethod: true }) is true;
+		this.generateDefaultDllImportSearchPathsAttribute = this.compilation?.GetTypeByMetadataName(typeof(DefaultDllImportSearchPathsAttribute).FullName) is object;
+		if (this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.Versioning.SupportedOSPlatformAttribute") is { } attribute)
+		{
+			this.generateSupportedOSPlatformAttributes = true;
+			AttributeData usageAttribute = attribute.GetAttributes().Single(att => att.AttributeClass?.Name == nameof(AttributeUsageAttribute));
+			var targets = (AttributeTargets)usageAttribute.ConstructorArguments[0].Value!;
+			this.generateSupportedOSPlatformAttributesOnInterfaces = (targets & AttributeTargets.Interface) == AttributeTargets.Interface;
+		}
+
+		// Convert some of our CanUse fields to preprocessor symbols so our templates can use them.
+		if (this.parseOptions is not null)
+		{
+			List<string> extraSymbols = new();
+			AddSymbolIf(this.canUseSpan, "canUseSpan");
+			AddSymbolIf(this.canCallCreateSpan, "canCallCreateSpan");
+			AddSymbolIf(this.canUseUnsafeAsRef, "canUseUnsafeAsRef");
+			AddSymbolIf(this.canUseUnsafeAdd, "canUseUnsafeAdd");
+			AddSymbolIf(this.canUseUnsafeNullRef, "canUseUnsafeNullRef");
+			AddSymbolIf(compilation?.GetTypeByMetadataName("System.Drawing.Point") is not null, "canUseSystemDrawing");
+			AddSymbolIf(this.IsFeatureAvailable(Feature.InterfaceStaticMembers), "canUseInterfaceStaticMembers");
+			AddSymbolIf(this.canUseUnscopedRef, "canUseUnscopedRef");
+
+			if (extraSymbols.Count > 0)
+			{
+				this.parseOptions = this.parseOptions.WithPreprocessorSymbols(this.parseOptions.PreprocessorSymbolNames.Concat(extraSymbols));
+			}
+
+			void AddSymbolIf(bool condition, string symbol)
+			{
+				if (condition)
+				{
+					extraSymbols.Add(symbol);
+				}
+			}
+		}
+
+		bool useComInterfaces = options.AllowMarshaling;
+		this.generalTypeSettings = new TypeSyntaxSettings(
+			this,
+			PreferNativeInt: this.LanguageVersion >= LanguageVersion.CSharp9,
+			PreferMarshaledTypes: false,
+			AllowMarshaling: options.AllowMarshaling,
+			QualifyNames: false);
+		this.fieldTypeSettings = this.generalTypeSettings with { QualifyNames = true, IsField = true };
+		this.delegateSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true };
+		this.enumTypeSettings = this.generalTypeSettings;
+		this.fieldOfHandleTypeDefTypeSettings = this.generalTypeSettings with { PreferNativeInt = false };
+		this.externSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true, PreferMarshaledTypes = options.AllowMarshaling };
+		this.externReleaseSignatureTypeSettings = this.externSignatureTypeSettings with { PreferNativeInt = false, PreferMarshaledTypes = false };
+		this.comSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true, PreferInOutRef = options.AllowMarshaling };
+		this.extensionMethodSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true };
+		this.functionPointerTypeSettings = this.generalTypeSettings with { QualifyNames = true, AvoidWinmdRootAlias = true, AllowMarshaling = false };
+		this.errorMessageTypeSettings = this.generalTypeSettings with { QualifyNames = true, Generator = null }; // Avoid risk of infinite recursion from errors in ToTypeSyntax
+
+		this.methodsAndConstantsClassName = IdentifierName(options.ClassName);
+
+		FetchTemplate("ComHelpers", this, out this.comHelperClass);
+		FetchTemplate("VariableLengthInlineArray`1", this, out this.variableLengthInlineArrayStruct1);
+		FetchTemplate("VariableLengthInlineArray`2", this, out this.variableLengthInlineArrayStruct2);
+	}
 
 	/// <summary>
 	/// Tests whether a string contains characters that do not belong in an API name.

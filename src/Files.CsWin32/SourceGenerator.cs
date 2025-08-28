@@ -45,15 +45,10 @@ public class SourceGenerator : ISourceGenerator
 		if (compilation.GetTypeByMetadataName("System.Memory`1") is null)
 			context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.MissingRecommendedReference, location: null, "System.Memory"));
 
-		// Create a generator for each winmd's & a generator for the documentations of the APIs in those metadata.
-		IEnumerable<string> appLocalLibraries = CollectAppLocalAllowedLibraries(context);
-		Docs? docs = ParseDocs(context);
-		Generator[] generators = [.. CollectMetadataPaths(context).Select(path => new Generator(path, docs, appLocalLibraries, options, compilation, (CSharpParseOptions)context.ParseOptions))];
-		if (TryFindNonUniqueValue(generators, g => g.InputAssemblyName, StringComparer.OrdinalIgnoreCase, out (Generator Item, string Value) nonUniqueGenerator))
-		{
-			context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.NonUniqueMetadataInputs, null, nonUniqueGenerator.Value));
+		// Create a generator for each WinMD file
+		var generators = CreateGeneratorsForEachWinMDFiles(context, compilation, options);
+		if (generators is null)
 			return;
-		}
 
 		// Generate the syntax trees for all requested APIs
 		using GeneratorManager superGenerator = GeneratorManager.CreateFromGenerators(generators.AsEnumerable());
@@ -100,6 +95,20 @@ public class SourceGenerator : ISourceGenerator
 		return nativeMethodsTxtFiles;
 	}
 
+	private static IEnumerable<Generator>? CreateGeneratorsForEachWinMDFiles(GeneratorExecutionContext context, CSharpCompilation compilation, GeneratorOptions options)
+	{
+		IEnumerable<string> appLocalLibraries = CollectAppLocalAllowedLibraries(context);
+		Docs? docs = ParseDocs(context);
+		var generators = GetAllWinMdFilePaths(context).Select(path => new Generator(path, docs, appLocalLibraries, options, compilation, (CSharpParseOptions)context.ParseOptions));
+		if (TryFindNonUniqueValue(generators, g => g.InputAssemblyName, StringComparer.OrdinalIgnoreCase, out (Generator Item, string Value) nonUniqueGenerator))
+		{
+			context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.NonUniqueMetadataInputs, null, nonUniqueGenerator.Value));
+			return null;
+		}
+
+		return generators;
+	}
+
 	private static string AssembleFullExceptionMessage(Exception ex)
 	{
 		var sb = new StringBuilder();
@@ -140,12 +149,12 @@ public class SourceGenerator : ISourceGenerator
 		return false;
 	}
 
-	private static IReadOnlyList<string> CollectMetadataPaths(GeneratorExecutionContext context)
+	private static IReadOnlyList<string> GetAllWinMdFilePaths(GeneratorExecutionContext context)
 	{
 		if (!context.AnalyzerConfigOptions.GlobalOptions.TryGetValue("build_property.CsWin32InputMetadataPaths", out string? delimitedMetadataBasePaths) ||
 			string.IsNullOrWhiteSpace(delimitedMetadataBasePaths))
 		{
-			return Array.Empty<string>();
+			return [];
 		}
 
 		string[] metadataBasePaths = delimitedMetadataBasePaths.Split('|');

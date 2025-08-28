@@ -69,7 +69,7 @@ internal record HandleTypeHandleInfo : TypeHandleInfo
 		}
 	}
 
-	internal override TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, Generator.GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default)
+	internal override TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default)
 	{
 		NameSyntax? nameSyntax;
 		bool isInterface;

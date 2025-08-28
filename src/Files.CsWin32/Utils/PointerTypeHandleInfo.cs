@@ -6,7 +6,7 @@ internal record PointerTypeHandleInfo(TypeHandleInfo ElementType) : TypeHandleIn
 {
 	public override string ToString() => this.ToTypeSyntaxForDisplay().ToString();
 
-	internal override TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, Generator.GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default)
+	internal override TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default)
 	{
 		Generator.NativeArrayInfo? nativeArrayInfo = customAttributes.HasValue ? inputs.Generator?.FindNativeArrayInfoAttribute(customAttributes.Value) : null;
 
@@ -17,7 +17,7 @@ internal record PointerTypeHandleInfo(TypeHandleInfo ElementType) : TypeHandleIn
 		}
 
 		bool xOptional = (parameterAttributes & ParameterAttributes.Optional) == ParameterAttributes.Optional;
-		bool mustUsePointers = xOptional && forElement == Generator.GeneratingElement.InterfaceMember && nativeArrayInfo is null;
+		bool mustUsePointers = xOptional && forElement == GeneratingElement.InterfaceMember && nativeArrayInfo is null;
 		mustUsePointers |= this.ElementType is HandleTypeHandleInfo handleElementType && inputs.Generator?.IsStructWithFlexibleArray(handleElementType) is true;
 		if (mustUsePointers)
 		{

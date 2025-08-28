@@ -8,7 +8,7 @@ internal abstract record TypeHandleInfo
 
 	internal bool IsConstantField { get; init; }
 
-	internal abstract TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, Generator.GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default);
+	internal abstract TypeSyntaxAndMarshaling ToTypeSyntax(TypeSyntaxSettings inputs, GeneratingElement forElement, CustomAttributeHandleCollection? customAttributes, ParameterAttributes parameterAttributes = default);
 
 	internal abstract bool? IsValueType(TypeSyntaxSettings inputs);
 
@@ -31,7 +31,7 @@ internal abstract record TypeHandleInfo
 		return true;
 	}
 
-	protected TypeSyntax ToTypeSyntaxForDisplay() => this.ToTypeSyntax(DebuggerDisplaySettings, Generator.GeneratingElement.Other, null).Type;
+	protected TypeSyntax ToTypeSyntaxForDisplay() => this.ToTypeSyntax(DebuggerDisplaySettings, GeneratingElement.Other, null).Type;
 
 	protected Generator.Context GetContext(TypeSyntaxSettings inputs) => inputs.Generator is not null
 		? inputs.Generator.DefaultContext with { AllowMarshaling = inputs.AllowMarshaling }
