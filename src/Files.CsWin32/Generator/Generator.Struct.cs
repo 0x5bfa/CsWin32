@@ -548,7 +548,7 @@ public partial class Generator
 				this.volatileCode.GenerateSpecialType("VariableLengthInlineArray1", () => this.volatileCode.AddSpecialType("VariableLengthInlineArray1", this.variableLengthInlineArrayStruct1));
 			}
 		}
-		else if (this.SuperGenerator is not null && this.SuperGenerator.TryGetGenerator("Windows.Win32", out Generator? generator))
+		else if (this.Manager is not null && this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 		{
 			generator.volatileCode.GenerationTransaction(delegate
 			{
@@ -567,7 +567,7 @@ public partial class Generator
 				this.volatileCode.GenerateSpecialType("VariableLengthInlineArray2", () => this.volatileCode.AddSpecialType("VariableLengthInlineArray2", this.variableLengthInlineArrayStruct2));
 			}
 		}
-		else if (this.SuperGenerator is not null && this.SuperGenerator.TryGetGenerator("Windows.Win32", out Generator? generator))
+		else if (this.Manager is not null && this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 		{
 			generator.volatileCode.GenerationTransaction(delegate
 			{

@@ -12,7 +12,7 @@ public class StructTests : GeneratorTestBase
     public void CocreatableStructs()
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("ShellLink", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("ShellLink", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         ClassDeclarationSyntax classDecl = Assert.IsType<ClassDeclarationSyntax>(this.FindGeneratedType("ShellLink").Single());
@@ -24,7 +24,7 @@ public class StructTests : GeneratorTestBase
     public void AlsoUsableForTypeDefs(string structName, string alsoUsableForStructName)
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(structName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(structName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.IsType<StructDeclarationSyntax>(this.FindGeneratedType(structName).Single());
@@ -39,7 +39,7 @@ public class StructTests : GeneratorTestBase
     {
         this.compilation = this.starterCompilations["net8.0-x64"]; // MEMORY_BASIC_INFORMATION is arch-specific
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(structName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(structName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         StructDeclarationSyntax structDecl = Assert.IsType<StructDeclarationSyntax>(this.FindGeneratedType(structName).Single());
@@ -52,7 +52,7 @@ public class StructTests : GeneratorTestBase
     {
         this.compilation = this.starterCompilations[tfm];
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("INPUTCONTEXT", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("INPUTCONTEXT", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -67,7 +67,7 @@ public class StructTests : GeneratorTestBase
         }
 
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("RECT", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("RECT", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -226,7 +226,7 @@ namespace Microsoft.Windows.Sdk
     public void SpecialStruct_ByRequest(string structName)
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(structName, out IReadOnlyCollection<string> preciseApi, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(structName, out IReadOnlyCollection<string> preciseApi, out _, CancellationToken.None));
         Assert.Single(preciseApi);
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();

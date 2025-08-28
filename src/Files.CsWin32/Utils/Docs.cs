@@ -12,10 +12,7 @@ namespace Files.CsWin32;
 public class Docs
 {
 	private static readonly Dictionary<string, Docs> DocsByPath = new Dictionary<string, Docs>(StringComparer.OrdinalIgnoreCase);
-	private static readonly MessagePackSerializerOptions MsgPackOptions = MessagePackSerializerOptions.Standard.WithResolver(
-		CompositeResolver.Create(
-			new IMessagePackFormatter[] { new ApiDetailsFormatter() },
-			new IFormatterResolver[] { StandardResolver.Instance }));
+	private static readonly MessagePackSerializerOptions MsgPackOptions = MessagePackSerializerOptions.Standard.WithResolver(CompositeResolver.Create([new ApiDetailsFormatter()], [StandardResolver.Instance]));
 
 	private readonly Dictionary<string, ApiDetails> apisAndDocs;
 

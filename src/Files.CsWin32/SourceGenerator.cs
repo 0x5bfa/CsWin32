@@ -39,13 +39,13 @@ public class SourceGenerator : ISourceGenerator
 			!nativeMethodsTxtFiles.Any())
 			return;
 
+		// Produce some diagnostics before actually starting to generate
 		if (!compilation.Options.AllowUnsafe)
 			context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsafeCodeRequired, location: null));
-
 		if (compilation.GetTypeByMetadataName("System.Memory`1") is null)
 			context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.MissingRecommendedReference, location: null, "System.Memory"));
 
-		// Create a generator for each metadata path & a generator for the documentations of the APIs in those metadata.
+		// Create a generator for each winmd's & a generator for the documentations of the APIs in those metadata.
 		IEnumerable<string> appLocalLibraries = CollectAppLocalAllowedLibraries(context);
 		Docs? docs = ParseDocs(context);
 		Generator[] generators = [.. CollectMetadataPaths(context).Select(path => new Generator(path, docs, appLocalLibraries, options, compilation, (CSharpParseOptions)context.ParseOptions))];
@@ -56,7 +56,7 @@ public class SourceGenerator : ISourceGenerator
 		}
 
 		// Generate the syntax trees for all requested APIs
-		using SuperGenerator superGenerator = SuperGenerator.Combine(generators);
+		using GeneratorManager superGenerator = GeneratorManager.CreateFromGenerators(generators.AsEnumerable());
 		foreach (AdditionalText nativeMethodsTxtFile in nativeMethodsTxtFiles)
 			GenerateAll(context, superGenerator, nativeMethodsTxtFile, options);
 
@@ -163,7 +163,7 @@ public class SourceGenerator : ISourceGenerator
 		return delimitedAppLocalLibraryPaths.Split('|').Select(Path.GetFileName);
 	}
 
-	private static void GenerateAll(GeneratorExecutionContext context, SuperGenerator superGenerator, AdditionalText nativeMethodsTxtFile, GeneratorOptions options)
+	private static void GenerateAll(GeneratorExecutionContext context, GeneratorManager manager, AdditionalText nativeMethodsTxtFile, GeneratorOptions options)
 	{
 		SourceText? nativeMethodsTxt = nativeMethodsTxtFile.GetText(context.CancellationToken);
 		if (nativeMethodsTxt is null)
@@ -199,7 +199,7 @@ public class SourceGenerator : ISourceGenerator
 				if (name.EndsWith(".*", StringComparison.Ordinal))
 				{
 					string? moduleName = name[..^2];
-					int matches = superGenerator.TryGenerateAllExternMethods(moduleName, context.CancellationToken);
+					int matches = manager.TryGenerateAllExternMethods(moduleName, context.CancellationToken);
 					switch (matches)
 					{
 						case 0:
@@ -216,12 +216,12 @@ public class SourceGenerator : ISourceGenerator
 				}
 
 				// Now, the name should be a method or type name. Generate it.
-				superGenerator.TryGenerate(name, out IReadOnlyCollection<string> matchingApis, out IReadOnlyCollection<string> redirectedEnums, context.CancellationToken);
+				manager.TryGenerate(name, out IReadOnlyCollection<string> matchingApis, out IReadOnlyCollection<string> redirectedEnums, context.CancellationToken);
 				foreach (string declaringEnum in redirectedEnums) context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UseEnumValueDeclaringType, location, declaringEnum));
 				switch (matchingApis.Count)
 				{
 					case 0:
-						IReadOnlyList<string> suggestions = superGenerator.GetSuggestions(name);
+						IReadOnlyList<string> suggestions = manager.GetSuggestions(name);
 						switch (suggestions.Count)
 						{
 							case > 0:

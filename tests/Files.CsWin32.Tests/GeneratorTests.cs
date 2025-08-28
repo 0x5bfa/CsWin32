@@ -101,7 +101,7 @@ public class GeneratorTests : GeneratorTestBase
     public void TemplateProvidedMembersMatchVisibilityWithContainingType_Methods(bool generatePublic)
     {
         this.generator = this.CreateGenerator(new GeneratorOptions { Public = generatePublic });
-        Assert.True(this.generator.TryGenerate("HRESULT", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("HRESULT", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -115,7 +115,7 @@ public class GeneratorTests : GeneratorTestBase
     public void TemplateProvidedMembersMatchVisibilityWithContainingType_OtherMemberTypes(bool generatePublic)
     {
         this.generator = this.CreateGenerator(new GeneratorOptions { Public = generatePublic });
-        Assert.True(this.generator.TryGenerate("PCSTR", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("PCSTR", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -141,7 +141,7 @@ public class GeneratorTests : GeneratorTestBase
         const string methodName = "GetStagedPackagePathByFullName2";
         this.compilation = this.starterCompilations["net8.0"];
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(methodName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(methodName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.All(this.FindGeneratedMethod(methodName), method => Assert.Contains(method.AttributeLists, al => IsAttributePresent(al, "SupportedOSPlatform")));
@@ -237,7 +237,7 @@ public class GeneratorTests : GeneratorTestBase
         };
         this.compilation = this.compilation.WithOptions(this.compilation.Options.WithPlatform(Platform.X64));
         this.generator = this.CreateGenerator(options);
-        Assert.True(this.generator.TryGenerate(api, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(api, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -250,7 +250,7 @@ public class GeneratorTests : GeneratorTestBase
     public void GetLastErrorNotIncludedInBulkGeneration()
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("kernel32.*", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("kernel32.*", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         Assert.True(this.IsMethodGenerated("CreateFile"));
         Assert.False(this.IsMethodGenerated("GetLastError"));
@@ -261,7 +261,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         this.generator = this.CreateGenerator();
         string ns = withNamespace ? "Windows.Win32.Security.Cryptography." : string.Empty;
-        Assert.True(this.generator.TryGenerate(ns + "ALG_SID_MD*", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(ns + "ALG_SID_MD*", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.Single(this.FindGeneratedConstant("ALG_SID_MD2"));
@@ -301,7 +301,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         this.compilation = this.starterCompilations[tfm];
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(typeName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(typeName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -313,8 +313,8 @@ public class GeneratorTests : GeneratorTestBase
     public void UnionWithRefAndValueTypeFields2()
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("MI_MethodDecl", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("MI_Value", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("MI_MethodDecl", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("MI_Value", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -324,7 +324,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         const string constant = "S_OK";
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(constant, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(constant, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         FieldDeclarationSyntax field = this.FindGeneratedConstant(constant).Single();
@@ -338,7 +338,7 @@ public class GeneratorTests : GeneratorTestBase
         CSharpCompilation referencedProject = this.compilation.WithAssemblyName("refdProj");
 
         using var referencedGenerator = this.CreateGenerator(new GeneratorOptions { Public = true }, referencedProject);
-        Assert.True(referencedGenerator.TryGenerate("HRESULT", CancellationToken.None));
+        Assert.True(referencedGenerator.TryGenerate("HRESULT", out _, CancellationToken.None));
         referencedProject = this.AddGeneratedCode(referencedProject, referencedGenerator);
         this.AssertNoDiagnostics(referencedProject);
 
@@ -346,7 +346,7 @@ public class GeneratorTests : GeneratorTestBase
         const string constant = "S_OK";
         this.compilation = this.compilation.AddReferences(referencedProject.ToMetadataReference());
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(constant, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(constant, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         FieldDeclarationSyntax field = this.FindGeneratedConstant(constant).Single();
@@ -359,7 +359,7 @@ public class GeneratorTests : GeneratorTestBase
     public void SpecialTypeDefsDoNotContainTheirOwnConstants(string constantName)
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(constantName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(constantName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         FieldDeclarationSyntax field = this.FindGeneratedConstant(constantName).Single();
@@ -373,7 +373,7 @@ public class GeneratorTests : GeneratorTestBase
         this.compilation = this.starterCompilations[tfm];
         this.parseOptions = this.parseOptions.WithPreprocessorSymbols(this.preprocessorSymbolsByTfm[tfm]);
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("DECIMAL", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("DECIMAL", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -382,7 +382,7 @@ public class GeneratorTests : GeneratorTestBase
     public void AmbiguousApiName()
     {
         this.generator = this.CreateGenerator();
-        Assert.False(this.generator.TryGenerate("IDENTITY_TYPE", out IReadOnlyCollection<string> preciseApi, CancellationToken.None));
+        Assert.False(this.generator.TryGenerate("IDENTITY_TYPE", out _, out IReadOnlyCollection<string> preciseApi, CancellationToken.None));
         Assert.Equal(2, preciseApi.Count);
         Assert.Contains("Windows.Win32.NetworkManagement.NetworkPolicyServer.IDENTITY_TYPE", preciseApi);
         Assert.Contains("Windows.Win32.Security.Authentication.Identity.Provider.IDENTITY_TYPE", preciseApi);
@@ -393,7 +393,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         const string StructName = "IMAGE_OPTIONAL_HEADER32";
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(StructName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(StructName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         StructDeclarationSyntax structDecl = (StructDeclarationSyntax)this.FindGeneratedType(StructName).Single();
@@ -415,7 +415,7 @@ public class GeneratorTests : GeneratorTestBase
     public void TemplateAPIsGenerate(string handleType)
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(handleType, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(handleType, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -424,12 +424,12 @@ public class GeneratorTests : GeneratorTestBase
     public void HasGeneratedCodeAttribute()
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("IDebugDocumentInfo", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("HANDLE", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("INPUT_RECORD", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("GetTickCount", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("ACTIVATE_KEYBOARD_LAYOUT_FLAGS", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("PAINTSTRUCT", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("IDebugDocumentInfo", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("HANDLE", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("INPUT_RECORD", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("GetTickCount", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("ACTIVATE_KEYBOARD_LAYOUT_FLAGS", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("PAINTSTRUCT", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -466,7 +466,7 @@ public class GeneratorTests : GeneratorTestBase
     public void GetMessageW_ReturnsBOOL()
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("GetMessage", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("GetMessage", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.All(this.FindGeneratedMethod("GetMessage"), method => Assert.True(method.ReturnType is QualifiedNameSyntax { Right: { Identifier: { ValueText: "BOOL" } } }));
@@ -477,7 +477,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         const string ifaceName = "ID3D11DeviceContext";
         this.generator = this.CreateGenerator(DefaultTestGeneratorOptions with { AllowMarshaling = allowMarshaling });
-        Assert.True(this.generator.TryGenerate(ifaceName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(ifaceName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -499,7 +499,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         var options = DefaultTestGeneratorOptions with { AllowMarshaling = allowMarshaling };
         this.generator = this.CreateGenerator(options);
-        Assert.True(this.generator.TryGenerate("EvtNext", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("EvtNext", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         IEnumerable<MethodDeclarationSyntax> overloads = this.FindGeneratedMethod("EvtNext");
@@ -511,7 +511,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         var options = DefaultTestGeneratorOptions with { AllowMarshaling = allowMarshaling };
         this.generator = this.CreateGenerator(options);
-        Assert.True(this.generator.TryGenerate("ISpellCheckerFactory", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("ISpellCheckerFactory", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         if (allowMarshaling)
@@ -534,7 +534,7 @@ public class GeneratorTests : GeneratorTestBase
             ns = ns.ToUpperInvariant();
         }
 
-        Assert.True(this.generator.TryGenerate(ns, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(ns, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.NotEmpty(this.FindGeneratedType("BOOL"));
@@ -605,7 +605,7 @@ public class GeneratorTests : GeneratorTestBase
         if (platform == Platform.AnyCpu)
         {
             // AnyCPU targets should throw an exception with a helpful error message when asked for arch-specific APIs
-            var ex = Assert.ThrowsAny<GenerationFailedException>(() => this.generator.TryGenerate(apiName, CancellationToken.None));
+            var ex = Assert.ThrowsAny<GenerationFailedException>(() => this.generator.TryGenerate(apiName, out _, CancellationToken.None));
             this.logger.WriteLine(ex.Message);
             this.CollectGeneratedCode(this.generator);
             this.AssertNoDiagnostics();
@@ -613,7 +613,7 @@ public class GeneratorTests : GeneratorTestBase
         else
         {
             // Arch-specific compilations should generate the requested APIs.
-            Assert.True(this.generator.TryGenerate(apiName, CancellationToken.None));
+            Assert.True(this.generator.TryGenerate(apiName, out _, CancellationToken.None));
             this.CollectGeneratedCode(this.generator);
             this.AssertNoDiagnostics();
         }
@@ -626,10 +626,10 @@ public class GeneratorTests : GeneratorTestBase
         this.generator = this.CreateGenerator();
 
         // Request a struct that depends on arch-specific IP6_ADDRESS.
-        Assert.ThrowsAny<GenerationFailedException>(() => this.generator.TryGenerate("DNS_SERVICE_INSTANCE", CancellationToken.None));
+        Assert.ThrowsAny<GenerationFailedException>(() => this.generator.TryGenerate("DNS_SERVICE_INSTANCE", out _, CancellationToken.None));
 
         // Request a struct that depends on DNS_SERVICE_INSTANCE.
-        Assert.ThrowsAny<GenerationFailedException>(() => this.generator.TryGenerate("DNS_SERVICE_REGISTER_REQUEST", CancellationToken.None));
+        Assert.ThrowsAny<GenerationFailedException>(() => this.generator.TryGenerate("DNS_SERVICE_REGISTER_REQUEST", out _, CancellationToken.None));
 
         // Verify that no uncompilable code was generated.
         this.CollectGeneratedCode(this.generator);
@@ -646,8 +646,8 @@ public class GeneratorTests : GeneratorTestBase
         // Request a struct directly, and indirectly through another that references it.
         // This verifies that even if the metadata references a particular arch of the structure,
         // the right one for the CPU architecture is generated.
-        Assert.True(this.generator.TryGenerate("SP_PROPCHANGE_PARAMS", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("SP_CLASSINSTALL_HEADER", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("SP_PROPCHANGE_PARAMS", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("SP_CLASSINSTALL_HEADER", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -672,7 +672,7 @@ public class GeneratorTests : GeneratorTestBase
     public void FARPROC_AsFieldType(bool allowMarshaling)
     {
         this.generator = this.CreateGenerator(new GeneratorOptions { AllowMarshaling = allowMarshaling });
-        Assert.True(this.generator.TryGenerate("EXTPUSH", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("EXTPUSH", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -685,14 +685,14 @@ public class GeneratorTests : GeneratorTestBase
     public void GetLastErrorGenerationThrowsWhenExplicitlyCalled()
     {
         this.generator = this.CreateGenerator();
-        Assert.Throws<NotSupportedException>(() => this.generator.TryGenerate("GetLastError", CancellationToken.None));
+        Assert.Throws<NotSupportedException>(() => this.generator.TryGenerate("GetLastError", out _, CancellationToken.None));
     }
 
     [Fact(Skip = "https://github.com/microsoft/win32metadata/issues/129")]
     public void DeleteObject_TakesTypeDefStruct()
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("DeleteObject", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("DeleteObject", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         MethodDeclarationSyntax? deleteObjectMethod = this.FindGeneratedMethod("DeleteObject").FirstOrDefault();
@@ -711,7 +711,7 @@ public class GeneratorTests : GeneratorTestBase
     public void SynthesizedTypesCanBeDirectlyRequested(string synthesizedTypeName)
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(synthesizedTypeName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(synthesizedTypeName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.Single(this.FindGeneratedType(synthesizedTypeName));
@@ -730,7 +730,7 @@ public class GeneratorTests : GeneratorTestBase
         this.compilation = this.starterCompilations["net35"];
         this.generator = this.CreateGenerator();
 
-        Assert.True(this.generator.TryGenerate(synthesizedTypeName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(synthesizedTypeName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.Single(this.FindGeneratedType(synthesizedTypeName));
@@ -742,7 +742,7 @@ public class GeneratorTests : GeneratorTestBase
         this.compilation = this.starterCompilations["net35"];
         var options = DefaultTestGeneratorOptions with { AllowMarshaling = allowMarshaling };
         this.generator = this.CreateGenerator(options);
-        Assert.True(this.generator.TryGenerate("EvtNext", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("EvtNext", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -752,7 +752,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         const string MethodName = "PathParseIconLocation";
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(MethodName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(MethodName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         IEnumerable<MethodDeclarationSyntax> generatedMethods = this.FindGeneratedMethod(MethodName);
@@ -785,8 +785,8 @@ public class GeneratorTests : GeneratorTestBase
     public void RenamedMethodsClass()
     {
         this.generator = this.CreateGenerator(new GeneratorOptions { ClassName = "MyPInvoke" });
-        Assert.True(this.generator.TryGenerate("GetTickCount", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("CDB_REPORT_BITS", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("GetTickCount", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("CDB_REPORT_BITS", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.NotEmpty(this.FindGeneratedType("MyPInvoke"));
@@ -798,7 +798,7 @@ public class GeneratorTests : GeneratorTestBase
     {
         this.compilation = this.compilation.WithOptions(this.compilation.Options.WithPlatform(platform));
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("TBBUTTON", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("TBBUTTON", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -817,19 +817,19 @@ public class GeneratorTests : GeneratorTestBase
         }
 
         using var referencedGenerator = this.CreateGenerator(new GeneratorOptions { ClassName = "P1" }, referencedProject);
-        Assert.True(referencedGenerator.TryGenerate("LockWorkStation", CancellationToken.None));
-        Assert.True(referencedGenerator.TryGenerate("CreateFile", CancellationToken.None));
-        Assert.True(referencedGenerator.TryGenerate("RAWHID", CancellationToken.None));
-        Assert.True(referencedGenerator.TryGenerate("SHFILEINFOW", CancellationToken.None)); // generates inline arrays + extension methods
+        Assert.True(referencedGenerator.TryGenerate("LockWorkStation", out _, CancellationToken.None));
+        Assert.True(referencedGenerator.TryGenerate("CreateFile", out _, CancellationToken.None));
+        Assert.True(referencedGenerator.TryGenerate("RAWHID", out _, CancellationToken.None));
+        Assert.True(referencedGenerator.TryGenerate("SHFILEINFOW", out _, CancellationToken.None)); // generates inline arrays + extension methods
         referencedProject = this.AddGeneratedCode(referencedProject, referencedGenerator);
         this.AssertNoDiagnostics(referencedProject);
 
         // Now produce more code in a referencing project that includes at least one of the same types as generated in the referenced project.
         this.compilation = this.compilation.AddReferences(referencedProject.ToMetadataReference());
         this.generator = this.CreateGenerator(new GeneratorOptions { ClassName = "P2" });
-        Assert.True(this.generator.TryGenerate("HidD_GetAttributes", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("RAWHID", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("DROPDESCRIPTION", CancellationToken.None)); // reuses the same inline array and extension methods as SHFILEINFOW.
+        Assert.True(this.generator.TryGenerate("HidD_GetAttributes", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("RAWHID", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("DROPDESCRIPTION", out _, CancellationToken.None)); // reuses the same inline array and extension methods as SHFILEINFOW.
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -858,12 +858,12 @@ public class GeneratorTests : GeneratorTestBase
             using var referencedGenerator = this.CreateGenerator(new GeneratorOptions { Public = !internalsVisibleTo }, referencedProject);
 
             // Both will declare HRESULT
-            Assert.True(referencedGenerator.TryGenerate("HANDLE", CancellationToken.None));
+            Assert.True(referencedGenerator.TryGenerate("HANDLE", out _, CancellationToken.None));
 
             // One will declare FILE_SHARE_MODE
             if (i % 2 == 0)
             {
-                Assert.True(referencedGenerator.TryGenerate("FILE_SHARE_MODE", CancellationToken.None));
+                Assert.True(referencedGenerator.TryGenerate("FILE_SHARE_MODE", out _, CancellationToken.None));
             }
 
             referencedProject = this.AddGeneratedCode(referencedProject, referencedGenerator);
@@ -878,8 +878,8 @@ public class GeneratorTests : GeneratorTestBase
 
         // Now produce more code in a referencing project that needs HANDLE, which is found *twice*, once in each referenced project.
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("CreateFile", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("FILE_ACCESS_RIGHTS", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("CreateFile", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("FILE_ACCESS_RIGHTS", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
 
         // Consume the API to verify the user experience isn't broken.
@@ -931,7 +931,7 @@ class Program
     {
         using FileStream competingReader = File.OpenRead(MetadataPath);
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("CreateFile", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("CreateFile", out _, CancellationToken.None));
     }
 
     [Theory]
@@ -1007,7 +1007,7 @@ class Program
     public void ParametersIncludeSizeParamIndex()
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate("IEnumSearchScopeRules", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("IEnumSearchScopeRules", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 

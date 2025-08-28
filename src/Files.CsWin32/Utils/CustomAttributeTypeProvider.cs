@@ -6,7 +6,7 @@ namespace Files.CsWin32;
 
 internal class CustomAttributeTypeProvider : ICustomAttributeTypeProvider<TypeSyntax>
 {
-	internal static readonly CustomAttributeTypeProvider Instance = new CustomAttributeTypeProvider();
+	internal static readonly CustomAttributeTypeProvider Instance = new();
 
 	private CustomAttributeTypeProvider()
 	{

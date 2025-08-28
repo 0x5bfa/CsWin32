@@ -41,7 +41,7 @@ public class HandleTests : GeneratorTestBase
     {
         this.generator = this.CreateGenerator();
         const string methodName = "TcAddFilter";
-        Assert.True(this.generator.TryGenerate(methodName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(methodName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -120,7 +120,7 @@ public class HandleTests : GeneratorTestBase
     public void HandleTypeDefsUseVoidStarAsFieldType(string handleType)
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(handleType, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(handleType, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         StructDeclarationSyntax hwnd = Assert.IsType<StructDeclarationSyntax>(this.FindGeneratedType(handleType).Single());

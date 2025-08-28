@@ -3,7 +3,7 @@
 namespace Files.CsWin32;
 
 /// <summary>
-/// The generator interface implemented by <see cref="Generator"/> and <see cref="SuperGenerator"/>.
+/// The generator interface implemented by <see cref="Generator"/> and <see cref="GeneratorManager"/>.
 /// </summary>
 public interface IGenerator : IDisposable
 {

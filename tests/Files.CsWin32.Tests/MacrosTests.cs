@@ -12,7 +12,7 @@ public class MacrosTests : GeneratorTestBase
     public void MacroAPIsGenerateWithAppropriateVisibility(bool publicVisibility)
     {
         this.generator = this.CreateGenerator(DefaultTestGeneratorOptions with { Public = publicVisibility });
-        Assert.True(this.generator.TryGenerate("MAKELONG", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("MAKELONG", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         var makelongMethod = Assert.Single(this.FindGeneratedMethod("MAKELONG"));
@@ -24,7 +24,7 @@ public class MacrosTests : GeneratorTestBase
     public void MacroAPIsGenerate(string macro)
     {
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(macro, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(macro, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         Assert.Single(this.FindGeneratedMethod(macro));

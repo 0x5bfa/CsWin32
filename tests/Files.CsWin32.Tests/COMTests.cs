@@ -184,7 +184,7 @@ public class COMTests : GeneratorTestBase
         const string WinRTInteropInterfaceName = "IGraphicsEffectD2D1Interop";
 
         this.generator = this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(WinRTInteropInterfaceName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(WinRTInteropInterfaceName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
 
@@ -222,7 +222,7 @@ public class COMTests : GeneratorTestBase
     {
         this.compilation = this.starterCompilations["net8.0"];
         this.generator = this.CreateGenerator(DefaultTestGeneratorOptions with { AllowMarshaling = false });
-        Assert.True(this.generator.TryGenerate("IFileOpenDialog", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("IFileOpenDialog", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -297,10 +297,10 @@ public class COMTests : GeneratorTestBase
         this.generator = this.CreateGenerator(DefaultTestGeneratorOptions with { AllowMarshaling = false });
 
         // Emit something into the Environment namespace, to invite collisions.
-        Assert.True(this.generator.TryGenerate("ENCLAVE_IDENTITY", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("ENCLAVE_IDENTITY", out _, CancellationToken.None));
 
         // Emit the interface that can require Environment.FailFast.
-        Assert.True(this.generator.TryGenerate("ITypeInfo", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("ITypeInfo", out _, CancellationToken.None));
 
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();

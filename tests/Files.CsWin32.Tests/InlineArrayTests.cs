@@ -24,7 +24,7 @@ public class InlineArrayTests : GeneratorTestBase
         // and a custom managed.
         //// TODO: code here
 
-        Assert.True(this.generator.TryGenerate(api, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(api, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -64,7 +64,7 @@ public class InlineArrayTests : GeneratorTestBase
     {
         this.compilation = this.starterCompilations[tfm];
         this.generator = this.CreateGenerator(new GeneratorOptions { AllowMarshaling = allowMarshaling, MultiTargetingFriendlyAPIs = multitargetingAPIs });
-        Assert.True(this.generator.TryGenerate("RTM_ENTITY_EXPORT_METHODS", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("RTM_ENTITY_EXPORT_METHODS", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -75,8 +75,8 @@ public class InlineArrayTests : GeneratorTestBase
         this.generator = this.CreateGenerator();
 
         // These two APIs are specially selected because they are both char arrays, and thus would both request the SliceAtNull extension method's generation.
-        Assert.True(this.generator.TryGenerate("RM_PROCESS_INFO", CancellationToken.None));
-        Assert.True(this.generator.TryGenerate("WER_REPORT_INFORMATION", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("RM_PROCESS_INFO", out _, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("WER_REPORT_INFORMATION", out _, CancellationToken.None));
 
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
@@ -89,7 +89,7 @@ public class InlineArrayTests : GeneratorTestBase
     public void FixedLengthInlineArrayIn_MODULEENTRY32(bool allowMarshaling)
     {
         this.generator = this.CreateGenerator(new GeneratorOptions { AllowMarshaling = allowMarshaling });
-        Assert.True(this.generator.TryGenerate("MODULEENTRY32", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("MODULEENTRY32", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
         var decl = (StructDeclarationSyntax)Assert.Single(this.FindGeneratedType("MODULEENTRY32"));

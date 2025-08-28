@@ -12,7 +12,7 @@ public class MultiMetadataTests : GeneratorTestBase
     public void BasicServiceFabric(bool allowMarshaling)
     {
         this.generator = this.CreateSuperGenerator(DefaultMetadataPaths.Concat(new[] { ServiceFabricMetadataPath }).ToArray(), DefaultTestGeneratorOptions with { AllowMarshaling = allowMarshaling });
-        Assert.True(this.generator.TryGenerate("IFabricStringResult", CancellationToken.None));
+        Assert.True(this.generator.TryGenerate("IFabricStringResult", out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }

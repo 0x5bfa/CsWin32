@@ -56,10 +56,10 @@ public partial class Generator
 					TypeDefinition typeDef = this.Reader.GetTypeDefinition(tdh);
 					return this.IsTypeDefStruct(typeDef);
 				}
-				else if (this.SuperGenerator is object)
+				else if (this.Manager is object)
 				{
 					TypeReference typeReference = this.Reader.GetTypeReference((TypeReferenceHandle)handleInfo.Handle);
-					if (this.SuperGenerator.TryGetTargetGenerator(new QualifiedTypeReference(this, typeReference), out Generator? targetGenerator))
+					if (this.Manager.TryGetTargetGenerator(new QualifiedTypeReference(this, typeReference), out Generator? targetGenerator))
 					{
 						if (targetGenerator.TryGetTypeDefHandle(this.Reader.GetString(typeReference.Namespace), this.Reader.GetString(typeReference.Name), out TypeDefinitionHandle foreignTypeDefHandle))
 						{
@@ -177,7 +177,7 @@ public partial class Generator
 		{
 			// Add implicit conversion operators for each AlsoUsableFor attribute on the struct.
 			var fullyQualifiedAlsoUsableForValue = $"{this.Reader.GetString(typeDef.Namespace)}.{alsoUsableForValue}";
-			if (this.TryGenerateType(fullyQualifiedAlsoUsableForValue))
+			if (this.TryGenerateType(fullyQualifiedAlsoUsableForValue, out _))
 			{
 				IdentifierNameSyntax alsoUsableForTypeSymbolName = IdentifierName(alsoUsableForValue);
 				ExpressionSyntax valueValueArg = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, valueParameter, fieldIdentifierName);
@@ -197,7 +197,7 @@ public partial class Generator
 			case "PWSTR":
 			case "PSTR":
 				members = AddOrReplaceMembers(members, this.ExtractMembersFromTemplate(name.Identifier.ValueText));
-				this.TryGenerateType("Windows.Win32.Foundation.PC" + name.Identifier.ValueText.Substring(1)); // the template references its constant version
+				this.TryGenerateType("Windows.Win32.Foundation.PC" + name.Identifier.ValueText.Substring(1), out _); // the template references its constant version
 				break;
 			case "VARIANT_BOOL":
 				members = AddOrReplaceMembers(members, this.ExtractMembersFromTemplate(name.Identifier.ValueText));

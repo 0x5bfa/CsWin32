@@ -256,7 +256,7 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal ImmutableDictionary<string, string> BannedAPIs => GetBannedAPIs(this.options);
 
-	internal SuperGenerator? SuperGenerator { get; set; }
+	internal GeneratorManager? Manager { get; set; }
 
 	/// <summary>
 	/// Gets the Windows.Win32 generator.
@@ -265,12 +265,12 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		get
 		{
-			if (this.IsWin32Sdk || this.SuperGenerator is null)
+			if (this.IsWin32Sdk || this.Manager is null)
 			{
 				return this;
 			}
 
-			if (this.SuperGenerator.TryGetGenerator("Windows.Win32", out Generator? generator))
+			if (this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 			{
 				return generator;
 			}
@@ -914,13 +914,13 @@ public partial class Generator : IGenerator, IDisposable
 					this.volatileCode.GenerateSpecialType("IVTable`2", () => this.volatileCode.AddSpecialType("IVTable`2", IVTableGenericInterface));
 				}
 
-				if (!this.TryGenerate("IUnknown", default))
+				if (!this.TryGenerate("IUnknown", out _, default))
 				{
 					throw new GenerationFailedException("Unable to generate IUnknown.");
 				}
 			}
 		}
-		else if (this.SuperGenerator is not null && this.SuperGenerator.TryGetGenerator("Windows.Win32", out Generator? generator))
+		else if (this.Manager is not null && this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 		{
 			generator.RequestComHelpers(context);
 		}
@@ -1019,7 +1019,7 @@ public partial class Generator : IGenerator, IDisposable
 			TypeReference typeRef = this.Reader.GetTypeReference(typeRefHandle);
 			if (typeRef.ResolutionScope.Kind == HandleKind.AssemblyReference)
 			{
-				if (this.SuperGenerator?.TryRequestInteropType(new(this, typeRef), context) is not true)
+				if (this.Manager?.TryRequestInteropType(new(this, typeRef), context) is not true)
 				{
 					// We can't find the interop among our metadata inputs.
 					// Before we give up and report an error, search for the required type among the compilation's referenced assemblies.
@@ -1047,7 +1047,7 @@ public partial class Generator : IGenerator, IDisposable
 				string identifierString = identifier.ToString();
 				if (identifierString.StartsWith(GlobalNamespacePrefix, StringComparison.Ordinal))
 				{
-					this.TryGenerateType(identifierString.Substring(GlobalNamespacePrefix.Length));
+					this.TryGenerateType(identifierString.Substring(GlobalNamespacePrefix.Length), out _);
 				}
 			}
 
@@ -1118,11 +1118,11 @@ public partial class Generator : IGenerator, IDisposable
 						specialDeclaration = this.FetchTemplate($"{specialName}");
 						if (!specialName.StartsWith("PC", StringComparison.Ordinal))
 						{
-							this.TryGenerateType("Windows.Win32.Foundation.PC" + specialName.Substring(1)); // the template references its constant version
+							this.TryGenerateType("Windows.Win32.Foundation.PC" + specialName.Substring(1), out _); // the template references its constant version
 						}
 						else if (specialName.StartsWith("PCZZ", StringComparison.Ordinal))
 						{
-							this.TryGenerateType("Windows.Win32.Foundation.PC" + specialName.Substring(4)); // the template references its single string version
+							this.TryGenerateType("Windows.Win32.Foundation.PC" + specialName.Substring(4), out _); // the template references its single string version
 						}
 
 						break;
@@ -1140,7 +1140,7 @@ public partial class Generator : IGenerator, IDisposable
 				this.volatileCode.AddSpecialType(specialName, specialDeclaration);
 			});
 		}
-		else if (this.SuperGenerator?.TryGetGenerator("Windows.Win32", out Generator? win32Generator) is true)
+		else if (this.Manager?.TryGetGenerator("Windows.Win32", out Generator? win32Generator) is true)
 		{
 			string? fullyQualifiedNameLocal = null!;
 			win32Generator.volatileCode.GenerationTransaction(delegate
@@ -1403,7 +1403,7 @@ public partial class Generator : IGenerator, IDisposable
 
 	private void TryGenerateTypeOrThrow(string possiblyQualifiedName)
 	{
-		if (!this.TryGenerateType(possiblyQualifiedName))
+		if (!this.TryGenerateType(possiblyQualifiedName, out _))
 		{
 			throw new GenerationFailedException("Unable to find expected type: " + possiblyQualifiedName);
 		}

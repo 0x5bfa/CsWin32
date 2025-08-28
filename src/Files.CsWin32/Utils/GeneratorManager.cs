@@ -2,43 +2,33 @@
 
 namespace Files.CsWin32;
 
-/// <summary>
-/// A coordinator of many <see cref="Generator"/> objects, allowing code to be generated that requires types from across many input winmd's.
-/// </summary>
-public class SuperGenerator : IGenerator, IDisposable
+/// <summary>A manager of many <see cref="Generator"/> objects, allowing code to be generated that requires types from across many input winmd's.</summary>
+public class GeneratorManager : IGenerator, IDisposable
 {
-	private SuperGenerator(ImmutableDictionary<string, Generator> generators)
-	{
-		this.Generators = generators;
-	}
-
-	/// <summary>
-	/// Gets the collection of generators managed by this <see cref="SuperGenerator"/>, indexed by their input winmd's.
-	/// </summary>
+	/// <summary>Gets the collection of generators managed by this <see cref="GeneratorManager"/>, indexed by their input winmd's.</summary>
 	public ImmutableDictionary<string, Generator> Generators { get; }
 
-	/// <summary>
-	/// Initializes a new instance of the <see cref="SuperGenerator"/> class.
-	/// </summary>
-	/// <param name="generators">The <see cref="Generator"/> objects to enable collaborative generation across. These should <em>not</em> have been added to a <see cref="SuperGenerator"/> previously.</param>
-	/// <returns>The new instance of <see cref="SuperGenerator"/>.</returns>
-	public static SuperGenerator Combine(params Generator[] generators) => Combine((IEnumerable<Generator>)generators);
-
-	/// <inheritdoc cref="Combine(Generator[])"/>
-	public static SuperGenerator Combine(IEnumerable<Generator> generators)
+	private GeneratorManager(ImmutableDictionary<string, Generator> generators)
 	{
-		SuperGenerator super = new(generators.ToImmutableDictionary(g => g.InputAssemblyName));
-		foreach (Generator generator in super.Generators.Values)
-		{
-			if (generator.SuperGenerator is object)
-			{
-				throw new InvalidOperationException($"This generator has already been added to a {nameof(SuperGenerator)}.");
-			}
+		Generators = generators;
+	}
 
-			generator.SuperGenerator = super;
+	/// <summary>Initializes a new instance of the <see cref="GeneratorManager"/> class.</summary>
+	/// <param name="generators">The <see cref="Generator"/> objects to enable collaborative generation across. These should <em>not</em> have been added to a <see cref="GeneratorManager"/> previously.</param>
+	/// <returns>The new instance of <see cref="GeneratorManager"/>.</returns>
+	public static GeneratorManager CreateFromGenerators(IEnumerable<Generator> generators)
+	{
+		GeneratorManager manager = new(generators.ToImmutableDictionary(g => g.InputAssemblyName));
+
+		foreach (Generator generator in manager.Generators.Values)
+		{
+			if (generator.Manager is not null)
+				throw new InvalidOperationException($"This generator has already been added to a {nameof(GeneratorManager)}.");
+
+			generator.Manager = manager;
 		}
 
-		return super;
+		return manager;
 	}
 
 	/// <inheritdoc cref="Generator.TryGenerateAllExternMethods(string, CancellationToken)"/>
@@ -46,19 +36,19 @@ public class SuperGenerator : IGenerator, IDisposable
 	public int TryGenerateAllExternMethods(string moduleName, CancellationToken cancellationToken)
 	{
 		int matches = 0;
-		foreach (Generator generator in this.Generators.Values)
+
+		foreach (Generator generator in Generators.Values)
 		{
 			if (generator.TryGenerateAllExternMethods(moduleName, cancellationToken))
-			{
 				matches++;
-			}
 		}
 
 		return matches;
 	}
 
 	/// <inheritdoc/>
-	public bool TryGenerate(string apiNameOrModuleWildcard, out IReadOnlyCollection<string> preciseApi, CancellationToken cancellationToken) => this.TryGenerate(apiNameOrModuleWildcard, out preciseApi, out _, cancellationToken);
+	public bool TryGenerate(string apiNameOrModuleWildcard, out IReadOnlyCollection<string> preciseApi, CancellationToken cancellationToken)
+		=> TryGenerate(apiNameOrModuleWildcard, out preciseApi, out _, cancellationToken);
 
 	/// <inheritdoc cref="TryGenerate(string, out IReadOnlyCollection{string}, CancellationToken)" path="/summary" />
 	/// <inheritdoc cref="TryGenerate(string, out IReadOnlyCollection{string}, CancellationToken)" path="/returns" />
@@ -210,15 +200,6 @@ public class SuperGenerator : IGenerator, IDisposable
 			.ThenBy(pair => pair.Key, StringComparer.Ordinal);
 	}
 
-	/// <inheritdoc/>
-	public void Dispose()
-	{
-		foreach (Generator generator in this.Generators.Values)
-		{
-			generator.Dispose();
-		}
-	}
-
 	/// <summary>
 	/// Looks up the <see cref="Generator"/> that owns a referenced type.
 	/// </summary>
@@ -295,5 +276,14 @@ public class SuperGenerator : IGenerator, IDisposable
 		}
 
 		return false;
+	}
+
+	/// <inheritdoc/>
+	public void Dispose()
+	{
+		foreach (Generator generator in this.Generators.Values)
+		{
+			generator.Dispose();
+		}
 	}
 }

@@ -185,7 +185,7 @@ public abstract class GeneratorTestBase : IDisposable, IAsyncLifetime
     protected void GenerateApi(string apiName)
     {
         this.generator ??= this.CreateGenerator();
-        Assert.True(this.generator.TryGenerate(apiName, CancellationToken.None));
+        Assert.True(this.generator.TryGenerate(apiName, out _, CancellationToken.None));
         this.CollectGeneratedCode(this.generator);
         this.AssertNoDiagnostics();
     }
@@ -373,11 +373,11 @@ public abstract class GeneratorTestBase : IDisposable, IAsyncLifetime
         return compilation;
     }
 
-    protected SuperGenerator CreateGenerator(GeneratorOptions? options = null, CSharpCompilation? compilation = null, bool includeDocs = false)
+    protected GeneratorManager CreateGenerator(GeneratorOptions? options = null, CSharpCompilation? compilation = null, bool includeDocs = false)
         => this.CreateSuperGenerator(DefaultMetadataPaths, options, compilation, includeDocs);
 
-    protected SuperGenerator CreateSuperGenerator(string[] metadataPaths, GeneratorOptions? options = null, CSharpCompilation? compilation = null, bool includeDocs = false) =>
-        SuperGenerator.Combine(metadataPaths.Select(path => new Generator(path, includeDocs ? Docs.Get(ApiDocsPath) : null, [], options ?? DefaultTestGeneratorOptions, compilation ?? this.compilation, this.parseOptions)));
+    protected GeneratorManager CreateSuperGenerator(string[] metadataPaths, GeneratorOptions? options = null, CSharpCompilation? compilation = null, bool includeDocs = false) =>
+        GeneratorManager.CreateFromGenerators(metadataPaths.Select(path => new Generator(path, includeDocs ? Docs.Get(ApiDocsPath) : null, [], options ?? DefaultTestGeneratorOptions, compilation ?? this.compilation, this.parseOptions)));
 
     private static ImmutableArray<Diagnostic> FilterDiagnostics(ImmutableArray<Diagnostic> diagnostics) => diagnostics.Where(d => d.Severity > DiagnosticSeverity.Hidden && d.Descriptor.Id != "CS1701").ToImmutableArray();
 

@@ -30,9 +30,9 @@ public partial class Generator
 
 	internal bool TryGetTypeDefHandle(TypeReferenceHandle typeRefHandle, out QualifiedTypeDefinitionHandle typeDefHandle)
 	{
-		if (this.SuperGenerator is object)
+		if (this.Manager is object)
 		{
-			return this.SuperGenerator.TryGetTypeDefinitionHandle(new QualifiedTypeReferenceHandle(this, typeRefHandle), out typeDefHandle);
+			return this.Manager.TryGetTypeDefinitionHandle(new QualifiedTypeReferenceHandle(this, typeRefHandle), out typeDefHandle);
 		}
 
 		if (this.MetadataIndex.TryGetTypeDefHandle(this.Reader, typeRefHandle, out TypeDefinitionHandle localTypeDefHandle))
