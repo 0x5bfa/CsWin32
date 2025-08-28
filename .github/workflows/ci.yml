@@ -28,14 +28,15 @@ jobs:
       run: dotnet build
 
     - name: Run the tests
-      run: dotnet test --logger "trx"
+      run: dotnet test --no-build --logger "trx"
 
     - name: Report the test results
-      uses: dorny/test-reporter@v1
+      uses: dorny/test-reporter@v2
       with:
         name: Summary Tests
         path: "**/*.trx"
         reporter: dotnet-trx
         only-summary: true
+        use-actions-summary: 'true'
         list-suites: 'failed'
         list-tests: 'failed'
