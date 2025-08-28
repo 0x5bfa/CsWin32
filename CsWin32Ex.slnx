@@ -26,7 +26,7 @@
     <File Path="tests/GenerationSandbox.props" />
     <Project Path="tests/GenerationSandbox.Tests/GenerationSandbox.Tests.csproj" />
     <Project Path="tests/GenerationSandbox.Unmarshalled.Tests/GenerationSandbox.Unmarshalled.Tests.csproj" />
-    <!--<Project Path="tests/CsWin32Ex.Tests/CsWin32Ex.Tests.csproj" />-->
+    <Project Path="tests/CsWin32Ex.Tests/CsWin32Ex.Tests.csproj" />
     <Project Path="tests/SpellChecker/SpellChecker.csproj" />
     <Project Path="tests/WinRTInteropTest/WinRTInteropTest.csproj">
       <Build Solution="*|NonWindows" Project="false" />

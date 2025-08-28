@@ -33,10 +33,9 @@ jobs:
     - name: Report the test results
       uses: dorny/test-reporter@v2
       with:
-        name: Summary Tests
+        name: Test summary
         path: "**/*.trx"
         reporter: dotnet-trx
-        only-summary: true
         use-actions-summary: 'true'
         list-suites: 'failed'
         list-tests: 'failed'
