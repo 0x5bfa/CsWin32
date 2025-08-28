@@ -28,7 +28,7 @@ jobs:
       run: dotnet build
 
     - name: Run the tests
-      run: dotnet test
+      run: dotnet test --logger "trx"
 
     - name: Report the test results
       uses: dorny/test-reporter@v1
