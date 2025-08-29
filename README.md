@@ -63,7 +63,7 @@ public struct HANDLE
 
 ### Enum-associated constants
 
-To generate constants associated to an enum type, define `AssociatedConstantAttribute` with the const name as its first parameter, and apply it to the enum. The associated constants will be generated inside the enum.
+To generate constants associated to an enum type, define `AssociatedConstantAttribute` with the const name as its first parameter, and apply it to the enum. The associated constants will be generated inside the enum and will not be generated as a constant.
 
 ```cs
 [AttributeUsage(AttributeTargets.Enum, AllowMultiple = true)]
@@ -74,10 +74,7 @@ public class AssociatedConstantAttribute(string ConstName) : Attribute { }
 [AssociatedConstant("SERVICE_NO_CHANGE")]
 public enum SERVICE_ERROR : uint
 {
-	SERVICE_ERROR_IGNORE = 0U,
-	SERVICE_ERROR_NORMAL = 1U,
-	SERVICE_ERROR_SEVERE = 2U,
-	SERVICE_ERROR_CRITICAL = 3U,
+	...
     // "SERVICE_NO_CHANGE = 4294967295U" will be generated
 }
 ```

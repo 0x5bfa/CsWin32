@@ -3,21 +3,21 @@
 
 public class EnumTests : GeneratorTestBase
 {
-    public EnumTests(ITestOutputHelper logger)
-        : base(logger)
-    {
-    }
+	public EnumTests(ITestOutputHelper logger) : base(logger)
+	{
+	}
 
-    [Fact]
-    public void EnumsIncludeAssociatedConstants()
-    {
-        this.GenerateApi("SERVICE_ERROR");
-        EnumDeclarationSyntax enumDecl = Assert.IsType<EnumDeclarationSyntax>(this.FindGeneratedType("SERVICE_ERROR").Single());
+	[Fact]
+	public void EnumsWithAssociatedConstants()
+	{
+		// Generate the enum that has a associated constant.
+		GenerateApi("SERVICE_ERROR");
+		EnumDeclarationSyntax enumDeclarationSyntax = Assert.IsType<EnumDeclarationSyntax>(FindGeneratedType("SERVICE_ERROR").Single());
 
-        // The enum should contain the constant.
-        Assert.Contains(enumDecl.Members, value => value.Identifier.ValueText == "SERVICE_NO_CHANGE");
+		// The enum should contain the constant.
+		Assert.Contains(enumDeclarationSyntax.Members, value => value.Identifier.ValueText == "SERVICE_NO_CHANGE");
 
-        // The constant should not be generated as a separate constant.
-        Assert.Empty(this.FindGeneratedConstant("SERVICE_NO_CHANGE"));
-    }
+		// The constant should not be generated as a separate constant.
+		Assert.Empty(FindGeneratedConstant("SERVICE_NO_CHANGE"));
+	}
 }

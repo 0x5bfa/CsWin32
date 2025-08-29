@@ -5,91 +5,110 @@ namespace CsWin32Ex;
 public partial class Generator
 {
 	/// <inheritdoc/>
-	public bool TryGetEnumName(string enumValueName, [NotNullWhen(true)] out string? declaringEnum) => this.WinMDIndexer.TryGetEnumName(this.WinMDReader, enumValueName, out declaringEnum);
+	public bool TryGetEnumName(string enumValueName, [NotNullWhen(true)] out string? declaringEnum)
+		=> WinMDIndexer.TryGetEnumName(WinMDReader, enumValueName, out declaringEnum);
 
-	private EnumDeclarationSyntax DeclareEnum(TypeDefinition typeDef)
+	private EnumDeclarationSyntax DeclareEnum(TypeDefinition typeDefinition)
 	{
-		bool flagsEnum = this.FindAttribute(typeDef.GetCustomAttributes(), nameof(System), nameof(FlagsAttribute)) is not null;
+		// Get if the enum has the "FlagsAttribute"
+		bool isFlags = FindAttribute(typeDefinition.GetCustomAttributes(), nameof(System), nameof(FlagsAttribute)) is not null;
 
-		var enumValues = new List<SyntaxNodeOrToken>();
-		TypeSyntax? enumBaseType = null;
-		foreach (FieldDefinitionHandle fieldDefHandle in typeDef.GetFields())
+		List<EnumMemberDeclarationSyntax> enumValues = [];
+		TryGetEnumBaseType(typeDefinition, out var enumBaseType);
+
+		// Generate the enum
+		foreach (var fieldDefHandle in typeDefinition.GetFields())
 		{
-			AddEnumValue(fieldDefHandle);
+			if (BuildEnumMemberDeclarationSyntax(fieldDefHandle, enumBaseType, isFlags, out var declarationSyntax))
+				enumValues.Add(declarationSyntax);
 		}
 
-		// Add associated constants.
-		foreach (CustomAttribute associatedConstAtt in WinMDFileHelper.FindAttributes(this.WinMDReader, typeDef.GetCustomAttributes(), InteropDecorationNamespace, AssociatedConstantAttribute))
+		// Generate the associated constants and put them into the enum as well
+		foreach (var associatedConstantAttribute in WinMDFileHelper.FindAttributes(WinMDReader, typeDefinition.GetCustomAttributes(), InteropDecorationNamespace, AssociatedConstantAttribute))
 		{
-			CustomAttributeValue<TypeSyntax> decodedAttribute = associatedConstAtt.DecodeValue(CustomAttributeTypeProvider.Instance);
-			if (decodedAttribute.FixedArguments.Length >= 1 && decodedAttribute.FixedArguments[0].Value is string constName)
-			{
-				if (TryFindConstant(constName, out FieldDefinitionHandle fieldHandle))
-				{
-					AddEnumValue(fieldHandle);
-				}
-			}
+			var decodedAttribute = associatedConstantAttribute.DecodeValue(CustomAttributeTypeProvider.Instance);
+			if (decodedAttribute.FixedArguments.Length >= 1 &&
+				decodedAttribute.FixedArguments[0].Value is string constName &&
+				TryFindConstantByNameInAllNamespaces(constName, out FieldDefinitionHandle fieldDefinitionHandle) &&
+				BuildEnumMemberDeclarationSyntax(fieldDefinitionHandle, enumBaseType, isFlags, out var declarationSyntax))
+				enumValues.Add(declarationSyntax);
 		}
 
-		if (enumBaseType is null)
-		{
-			throw new NotSupportedException("Unknown enum type.");
-		}
+		var separatedList = SyntaxFactory.SeparatedList(enumValues);
 
-		string? name = this.WinMDReader.GetString(typeDef.Name);
+		// Build the enum declaration syntax tree
+		string? name = WinMDReader.GetString(typeDefinition.Name);
 		EnumDeclarationSyntax result = EnumDeclaration(Identifier(name))
-			.WithMembers(SeparatedList<EnumMemberDeclarationSyntax>(enumValues))
-			.WithModifiers(TokenList(TokenWithSpace(this.Visibility)));
+			.WithMembers(SyntaxFactory.SeparatedList(enumValues, enumValues.Select(enumValue => TokenWithLineFeed(SyntaxKind.CommaToken))))
+			.WithModifiers(TokenList(TokenWithSpace(Visibility)));
 
-		if (!(enumBaseType is PredefinedTypeSyntax { Keyword: { RawKind: (int)SyntaxKind.IntKeyword } }))
-		{
+		// If the base type is not "System.Int32" (the default type), explicitly set it in the enum declaration
+		if (!(enumBaseType is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.IntKeyword }))
 			result = result.WithIdentifier(result.Identifier.WithTrailingTrivia(Space))
 				.WithBaseList(BaseList(SingletonSeparatedList<BaseTypeSyntax>(SimpleBaseType(enumBaseType).WithTrailingTrivia(LineFeed))).WithColonToken(TokenWithSpace(SyntaxKind.ColonToken)));
-		}
 
-		if (flagsEnum)
-		{
-			result = result.AddAttributeLists(
-				AttributeList().WithCloseBracketToken(TokenWithLineFeed(SyntaxKind.CloseBracketToken)).AddAttributes(FlagsAttributeSyntax));
-		}
+		// If the enum is a flags enum, add the "FlagsAttribute"
+		if (isFlags)
+			result = result.AddAttributeLists(AttributeList().WithCloseBracketToken(TokenWithLineFeed(SyntaxKind.CloseBracketToken)).AddAttributes(FlagsAttributeSyntax));
 
-		result = this.AddApiDocumentation(name, result);
+		// Add its documentation if available
+		result = AddApiDocumentation(name, result);
 
 		return result;
+	}
 
-		void AddEnumValue(FieldDefinitionHandle fieldDefHandle)
+	private bool TryGetEnumBaseType(TypeDefinition enumDefinition, out TypeSyntax enumBaseType)
+	{
+		foreach (var enumMemberDefinitionHandle in enumDefinition.GetFields())
 		{
-			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
-			string enumValueName = this.WinMDReader.GetString(fieldDef.Name);
-			ConstantHandle valueHandle = fieldDef.GetDefaultValue();
+			FieldDefinition enumMemberDefinition = WinMDReader.GetFieldDefinition(enumMemberDefinitionHandle);
+			string enumMemberName = WinMDReader.GetString(enumMemberDefinition.Name);
+			ConstantHandle valueHandle = enumMemberDefinition.GetDefaultValue();
 
-			// Enums shall have the exactly one instance field which shall be of the underlying type of the enum per ECMA-335
+			// Get the type of the enum based on the instance field that does not have a default value,
+			// per ECMA-335 "Enums shall have the exactly one instance field which shall be of the underlying type of the enum"
 			if (valueHandle.IsNil)
 			{
-				enumBaseType = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null).ToTypeSyntax(this._enumTypeSettings, GeneratingElement.EnumValue, null).Type;
-				return;
+				enumBaseType = enumMemberDefinition.DecodeSignature(SignatureHandleProvider.Instance, null).ToTypeSyntax(_enumTypeSettings, GeneratingElement.EnumValue, null).Type;
+				return true;
 			}
-
-			bool enumBaseTypeIsSigned = enumBaseType is PredefinedTypeSyntax { Keyword: { RawKind: (int)SyntaxKind.LongKeyword or (int)SyntaxKind.IntKeyword or (int)SyntaxKind.ShortKeyword or (int)SyntaxKind.SByteKeyword } };
-			ExpressionSyntax enumValue = flagsEnum ? ToHexExpressionSyntax(this.WinMDReader, valueHandle, enumBaseTypeIsSigned) : ToExpressionSyntax(this.WinMDReader, valueHandle);
-			EnumMemberDeclarationSyntax enumMember = EnumMemberDeclaration(SafeIdentifier(enumValueName))
-				.WithEqualsValue(EqualsValueClause(enumValue));
-			enumValues.Add(enumMember);
-			enumValues.Add(TokenWithLineFeed(SyntaxKind.CommaToken));
 		}
 
-		bool TryFindConstant(string name, out FieldDefinitionHandle fieldDefinitionHandle)
-		{
-			foreach (var ns in this.WinMDIndexer.MetadataByNamespace)
-			{
-				if (ns.Value.Fields.TryGetValue(name, out fieldDefinitionHandle))
-				{
-					return true;
-				}
-			}
+		// Unexpected and should never happen but just in case
+		throw new ArgumentException("Could not find the base type of the enum.");
+	}
 
-			fieldDefinitionHandle = default;
-			return false;
-		}
+	private bool BuildEnumMemberDeclarationSyntax(FieldDefinitionHandle enumMemberDefinitionHandle, TypeSyntax enumBaseType, bool isFlags, [NotNullWhen(true)] out EnumMemberDeclarationSyntax? enumMemberDeclarationSyntax)
+	{
+		enumMemberDeclarationSyntax = null;
+
+		FieldDefinition enumMemberDefinition = WinMDReader.GetFieldDefinition(enumMemberDefinitionHandle);
+		string enumMemberName = WinMDReader.GetString(enumMemberDefinition.Name);
+		ConstantHandle valueHandle = enumMemberDefinition.GetDefaultValue();
+		if (valueHandle.IsNil) return false;
+
+		// Check if the base type is signed integer, to add "unchecked" when the value is actually negative
+		bool isEnumBaseTypeSigned = enumBaseType is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.LongKeyword or (int)SyntaxKind.IntKeyword or (int)SyntaxKind.ShortKeyword or (int)SyntaxKind.SByteKeyword };
+
+		// If the enum is a flags enum, format the value as 16-based decimal; otherwise, format it as 10-based decimal.
+		ExpressionSyntax enumValueExpressionSyntax = isFlags ? ToHexExpressionSyntax(WinMDReader, valueHandle, isEnumBaseTypeSigned) : ToExpressionSyntax(WinMDReader, valueHandle);
+
+		// Build the enum member declaration syntax tree
+		enumMemberDeclarationSyntax = EnumMemberDeclaration(SafeIdentifier(enumMemberName))
+			.WithEqualsValue(EqualsValueClause(enumValueExpressionSyntax));
+
+		return true;
+
+		//enumValues.Add(TokenWithLineFeed(SyntaxKind.CommaToken));
+	}
+
+	private bool TryFindConstantByNameInAllNamespaces(string constName, out FieldDefinitionHandle fieldDefinitionHandle)
+	{
+		foreach (var ns in WinMDIndexer.MetadataByNamespace)
+			if (ns.Value.Fields.TryGetValue(constName, out fieldDefinitionHandle))
+				return true;
+
+		fieldDefinitionHandle = default;
+		return false;
 	}
 }
