@@ -62,6 +62,8 @@ public partial class Generator
 			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
 			string enumValueName = this.WinMDReader.GetString(fieldDef.Name);
 			ConstantHandle valueHandle = fieldDef.GetDefaultValue();
+
+			// Enums shall have the exactly one instance field which shall be of the underlying type of the enum per ECMA-335
 			if (valueHandle.IsNil)
 			{
 				enumBaseType = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null).ToTypeSyntax(this._enumTypeSettings, GeneratingElement.EnumValue, null).Type;

@@ -196,6 +196,7 @@ public partial class Generator : IGenerator, IDisposable
 
 		// Initialize the options
 		_options = options;
+		_options.Validate();
 		_compilation = compilation;
 		_parseOptions = parseOptions;
 		_volatileCode = new(_committedCode);

@@ -18,7 +18,7 @@ When authoring a WinMD file for use with CsWin32 (or CsWin32Ex), ensure that you
 
 ### Supported architectures & OS platforms
 
-To prevent the generator from generating a type that is not compatible with the current platforms and OS platforms configured in the project that consumes the generator and to report a diagnostic for it, define a `SupportedArchitectureAttribute` & `SupportedOSPlatform` with an enum as its first parameter, and apply it to the type.
+To prevent the generator from generating a type that is not compatible with the current platforms and the OS platform configured in the project that consumes the generator and to report a diagnostic or an error for it, define a `SupportedArchitectureAttribute` & `SupportedOSPlatform` with an enum as its first parameter, and apply it to the type.
 
 ```cs
 [Flags]
@@ -31,7 +31,7 @@ public enum Architecture
     All = Architecture.X64 | Architecture.X86 | Architecture.Arm64
 }
 
-public class SupportedArchitectureAttribute(Architecture arch) : Attribute { }
+public class SupportedArchitectureAttribute(Architecture Architecture) : Attribute { }
 
 [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Interface | AttributeTargets.Method, AllowMultiple = false)]
 public class SupportedOSPlatformAttribute(string OSPlatform) : Attribute { }
@@ -49,7 +49,7 @@ public static extern IntPtr SetWindowLongPtrW(...);
 To generate a proper dispose method for a native handle, define a `RAIIFreeAttribute` with the method name as its first parameter, and apply it to the structs representing native handles (the generator only checks for the attribute’s name; its origin does not matter).
 
 ```cs
-public class RAIIFreeAttribute(string Name) : Attribute {}
+public class RAIIFreeAttribute(string MethodName) : Attribute {}
 ```
 
 ```cs
@@ -59,7 +59,27 @@ public struct HANDLE
     // When this is IntPtr or UIntPtr, an appropriate SafeHandle will also be generated.
     public unsafe void* Value;
 }
+```
 
+### Enum-associated constants
+
+To generate constants associated to an enum type, define `AssociatedConstantAttribute` with the const name as its first parameter, and apply it to the enum. The associated constants will be generated inside the enum.
+
+```cs
+[AttributeUsage(AttributeTargets.Enum, AllowMultiple = true)]
+public class AssociatedConstantAttribute(string ConstName) : Attribute { }
+```
+
+```cs
+[AssociatedConstant("SERVICE_NO_CHANGE")]
+public enum SERVICE_ERROR : uint
+{
+	SERVICE_ERROR_IGNORE = 0U,
+	SERVICE_ERROR_NORMAL = 1U,
+	SERVICE_ERROR_SEVERE = 2U,
+	SERVICE_ERROR_CRITICAL = 3U,
+    // "SERVICE_NO_CHANGE = 4294967295U" will be generated
+}
 ```
 
 _More coming soon._
