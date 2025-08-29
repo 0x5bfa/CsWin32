@@ -7,7 +7,7 @@ public partial class Generator
 	/// <inheritdoc/>
 	public void GenerateAllExternMethods(CancellationToken cancellationToken)
 	{
-		foreach (MethodDefinitionHandle methodHandle in this.MetadataIndex.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetMethods()))
+		foreach (MethodDefinitionHandle methodHandle in this.WinMDIndexer.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetMethods()))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
@@ -16,7 +16,7 @@ public partial class Generator
 			{
 				try
 				{
-					this.volatileCode.GenerationTransaction(delegate
+					this._volatileCode.GenerationTransaction(delegate
 					{
 						this.RequestExternMethod(methodHandle);
 					});
@@ -38,7 +38,7 @@ public partial class Generator
 	public bool TryGenerateAllExternMethods(string moduleName, CancellationToken cancellationToken)
 	{
 		bool successful = false;
-		foreach (MethodDefinitionHandle methodHandle in this.MetadataIndex.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetMethods()))
+		foreach (MethodDefinitionHandle methodHandle in this.WinMDIndexer.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetMethods()))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
@@ -72,7 +72,7 @@ public partial class Generator
 				{
 					try
 					{
-						this.volatileCode.GenerationTransaction(delegate
+						this._volatileCode.GenerationTransaction(delegate
 						{
 							this.RequestExternMethod(methodHandle);
 						});
@@ -107,7 +107,7 @@ public partial class Generator
 				throw new NotSupportedException(reason);
 			}
 
-			this.volatileCode.GenerationTransaction(delegate
+			this._volatileCode.GenerationTransaction(delegate
 			{
 				this.RequestExternMethod(methodDefHandle);
 			});
@@ -137,13 +137,13 @@ public partial class Generator
 			TypeDefinition declaringTypeDef = this.Reader.GetTypeDefinition(methodDefinition.GetDeclaringType());
 			string ns = this.Reader.GetString(declaringTypeDef.Namespace);
 			string methodName = this.Reader.GetString(methodDefinition.Name);
-			if (this.MetadataIndex.MetadataByNamespace[ns].MethodsForOtherPlatform.Contains(methodName))
+			if (this.WinMDIndexer.MetadataByNamespace[ns].MethodsForOtherPlatform.Contains(methodName))
 			{
 				throw new PlatformIncompatibleException($"Request for method ({methodName}) that is not available given the target platform.");
 			}
 		}
 
-		this.volatileCode.GenerateMethod(methodDefinitionHandle, () => this.DeclareExternMethod(methodDefinitionHandle));
+		this._volatileCode.GenerateMethod(methodDefinitionHandle, () => this.DeclareExternMethod(methodDefinitionHandle));
 	}
 
 	private string GetMethodNamespace(MethodDefinition methodDef) => this.Reader.GetString(this.Reader.GetTypeDefinition(methodDef.GetDeclaringType()).Namespace);
@@ -182,7 +182,7 @@ public partial class Generator
 			}
 
 			// If this method releases a handle, recreate the method signature such that we take the struct rather than the SafeHandle as a parameter.
-			TypeSyntaxSettings typeSettings = this.MetadataIndex.ReleaseMethods.Contains(entrypoint ?? methodName) ? this.externReleaseSignatureTypeSettings : this.externSignatureTypeSettings;
+			TypeSyntaxSettings typeSettings = this.WinMDIndexer.ReleaseMethods.Contains(entrypoint ?? methodName) ? this._externReleaseSignatureTypeSettings : this._externSignatureTypeSettings;
 			MethodSignature<TypeHandleInfo> signature = methodDefinition.DecodeSignature(SignatureHandleProvider.Instance, null);
 			bool requiresUnicodeCharSet = signature.ParameterTypes.Any(p => p is PrimitiveTypeHandleInfo { PrimitiveTypeCode: PrimitiveTypeCode.Char });
 
@@ -208,7 +208,7 @@ public partial class Generator
 			}
 
 			bool setLastError = (import.Attributes & MethodImportAttributes.SetLastError) == MethodImportAttributes.SetLastError;
-			bool setLastErrorViaMarshaling = setLastError && (this.Options.AllowMarshaling || !this.canUseSetLastPInvokeError);
+			bool setLastErrorViaMarshaling = setLastError && (this.Options.AllowMarshaling || !this._canUseSetLastPInvokeError);
 			bool setLastErrorManually = setLastError && !setLastErrorViaMarshaling;
 
 			AttributeListSyntax CreateDllImportAttributeList()
@@ -216,7 +216,7 @@ public partial class Generator
 				AttributeListSyntax result = AttributeList()
 					.WithCloseBracketToken(TokenWithLineFeed(SyntaxKind.CloseBracketToken))
 					.AddAttributes(DllImport(import, moduleName, entrypoint, setLastErrorViaMarshaling, requiresUnicodeCharSet ? CharSet.Unicode : CharSet.Ansi));
-				if (this.generateDefaultDllImportSearchPathsAttribute)
+				if (this._generateDefaultDllImportSearchPathsAttribute)
 				{
 					result = result.AddAttributes(
 						this.AppLocalLibraries.Contains(moduleName)
@@ -354,8 +354,8 @@ public partial class Generator
 			// Add documentation if we can find it.
 			exposedMethod = this.AddApiDocumentation(entrypoint ?? methodName, exposedMethod);
 
-			this.volatileCode.AddMemberToModule(moduleName, this.DeclareFriendlyOverloads(methodDefinition, exposedMethod, this.methodsAndConstantsClassName, FriendlyOverloadOf.ExternMethod, this.injectedPInvokeHelperMethods));
-			this.volatileCode.AddMemberToModule(moduleName, exposedMethod);
+			this._volatileCode.AddMemberToModule(moduleName, this.DeclareFriendlyOverloads(methodDefinition, exposedMethod, this._methodsAndConstantsClassName, FriendlyOverloadOf.ExternMethod, this._injectedPInvokeHelperMethods));
+			this._volatileCode.AddMemberToModule(moduleName, exposedMethod);
 		}
 		catch (Exception ex)
 		{

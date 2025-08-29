@@ -78,7 +78,7 @@ internal class WinMDFile : IDisposable
 		}
 	}
 
-	internal WinMDFileIndexer GetWinMDIndex(Platform? platform)
+	internal WinMDFileIndexer GetWinMDIndexer(Platform? platform)
 	{
 		lock (_lock)
 		{

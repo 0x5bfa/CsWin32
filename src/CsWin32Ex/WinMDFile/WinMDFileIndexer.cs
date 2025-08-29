@@ -236,50 +236,52 @@ internal class WinMDFileIndexer
 
 		foreach (TypeDefinitionHandle typeDefinitionHandle in namespaceDefinition.TypeDefinitions)
 		{
-			TypeDefinition td = reader.GetTypeDefinition(typeDefinitionHandle);
-			string typeName = reader.GetString(td.Name);
+			TypeDefinition typeDefinition = reader.GetTypeDefinition(typeDefinitionHandle);
+			string typeName = reader.GetString(typeDefinition.Name);
+
 			if (typeName == "Apis")
 			{
 				_apis.Add(typeDefinitionHandle);
-				foreach (MethodDefinitionHandle methodDefHandle in td.GetMethods())
+
+				foreach (MethodDefinitionHandle methodDefinitionHandle in typeDefinition.GetMethods())
 				{
-					MethodDefinition methodDef = reader.GetMethodDefinition(methodDefHandle);
-					string methodName = reader.GetString(methodDef.Name);
-					if (WinMDFileHelper.IsCompatibleWithPlatform(reader, this, _buildPlatform, methodDef.GetCustomAttributes()))
-					{
-						namespaceMetadata.Methods.Add(methodName, methodDefHandle);
-					}
+					MethodDefinition methodDefinition = reader.GetMethodDefinition(methodDefinitionHandle);
+					string methodName = reader.GetString(methodDefinition.Name);
+
+					if (WinMDFileHelper.IsCompatibleWithPlatform(reader, this, _buildPlatform, methodDefinition.GetCustomAttributes()))
+						namespaceMetadata.Methods.Add(methodName, methodDefinitionHandle);
 					else
-					{
 						namespaceMetadata.MethodsForOtherPlatform.Add(methodName);
-					}
 				}
 
-				foreach (FieldDefinitionHandle fieldDefHandle in td.GetFields())
+				foreach (FieldDefinitionHandle fieldDefinitionHandle in typeDefinition.GetFields())
 				{
-					FieldDefinition fieldDef = reader.GetFieldDefinition(fieldDefHandle);
+					FieldDefinition fieldDefinition = reader.GetFieldDefinition(fieldDefinitionHandle);
 					const FieldAttributes expectedFlags = FieldAttributes.Static | FieldAttributes.Public;
-					if ((fieldDef.Attributes & expectedFlags) == expectedFlags)
+					if ((fieldDefinition.Attributes & expectedFlags) == expectedFlags)
 					{
-						string fieldName = reader.GetString(fieldDef.Name);
-						namespaceMetadata.Fields.Add(fieldName, fieldDefHandle);
+						string fieldName = reader.GetString(fieldDefinition.Name);
+						namespaceMetadata.Fields.Add(fieldName, fieldDefinitionHandle);
 					}
 				}
 			}
 			else if (typeName == "<Module>")
 			{
 			}
-			else if (WinMDFileHelper.IsCompatibleWithPlatform(reader, this, _buildPlatform, td.GetCustomAttributes()))
+			else if (WinMDFileHelper.IsCompatibleWithPlatform(reader, this, _buildPlatform, typeDefinition.GetCustomAttributes()))
 			{
 				namespaceMetadata.Types.Add(typeName, typeDefinitionHandle);
 
-				// Detect if this is a struct representing a native handle.
-				if (td.GetFields().Count == 1 && td.BaseType.Kind == HandleKind.TypeReference)
+				// Check if this is a struct representing a native handle
+				if (typeDefinition.GetFields().Count is 1 && typeDefinition.BaseType.Kind is HandleKind.TypeReference)
 				{
-					TypeReference baseType = reader.GetTypeReference((TypeReferenceHandle)td.BaseType);
+					TypeReference baseType = reader.GetTypeReference((TypeReferenceHandle)typeDefinition.BaseType);
+
+					// Check if this type is a struct derived from "System.ValueType"
 					if (reader.StringComparer.Equals(baseType.Name, nameof(ValueType)) && reader.StringComparer.Equals(baseType.Namespace, nameof(System)))
 					{
-						if (WinMDFileHelper.FindAttribute(reader, td.GetCustomAttributes(), Generator.InteropDecorationNamespace, Generator.RAIIFreeAttribute) is CustomAttribute att)
+						// Check if this has "RAIIFreeAttribute"
+						if (WinMDFileHelper.TryGetAttributeOn(reader, typeDefinition.GetCustomAttributes(), Generator.InteropDecorationNamespace, Generator.RAIIFreeAttribute) is CustomAttribute att)
 						{
 							CustomAttributeValue<TypeSyntax> args = att.DecodeValue(CustomAttributeTypeProvider.Instance);
 							if (args.FixedArguments[0].Value is string freeMethodName)
@@ -287,21 +289,16 @@ internal class WinMDFileIndexer
 								_handleTypeReleaseMethod.Add(typeDefinitionHandle, freeMethodName);
 								_releaseMethods.Add(freeMethodName);
 
-								using FieldDefinitionHandleCollection.Enumerator fieldEnum = td.GetFields().GetEnumerator();
+								// Get the field that represents the native handle
+								using FieldDefinitionHandleCollection.Enumerator fieldEnum = typeDefinition.GetFields().GetEnumerator();
 								fieldEnum.MoveNext();
 								FieldDefinitionHandle fieldHandle = fieldEnum.Current;
 								FieldDefinition fieldDef = reader.GetFieldDefinition(fieldHandle);
+
+								// Check if the field that represents the native handle is the type that can be wrapped in a SafeHandle (i.e. IntPtr or UIntPtr)
 								if (fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null) is PrimitiveTypeHandleInfo { PrimitiveTypeCode: PrimitiveTypeCode.IntPtr or PrimitiveTypeCode.UIntPtr })
-								{
 									_handleTypeStructsWithIntPtrSizeFields.Add(typeName);
-								}
 							}
-						}
-						else if (WinMDAssemblyName == "Windows.Win32" && typeName == "HGDIOBJ")
-						{
-							// This "base type" struct doesn't have an RAIIFree attribute,
-							// but methods that take an HGDIOBJ parameter are expected to offer SafeHandle friendly overloads.
-							_handleTypeReleaseMethod.Add(typeDefinitionHandle, "DeleteObject");
 						}
 					}
 				}
@@ -315,6 +312,7 @@ internal class WinMDFileIndexer
 		if (!namespaceMetadata.IsEmpty)
 			MetadataByNamespace.Add(namespaceFullName, namespaceMetadata);
 
+		// Recurse into child namespaces
 		foreach (NamespaceDefinitionHandle childNsHandle in namespaceDefinition.NamespaceDefinitions)
 			PopulateNamespace(reader, reader.GetNamespaceDefinition(childNsHandle), namespaceFullName);
 	}

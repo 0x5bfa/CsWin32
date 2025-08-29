@@ -7,7 +7,7 @@ public partial class Generator
 	/// <inheritdoc/>
 	public void GenerateAllConstants(CancellationToken cancellationToken)
 	{
-		foreach (FieldDefinitionHandle fieldDefHandle in this.MetadataIndex.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetFields()))
+		foreach (FieldDefinitionHandle fieldDefHandle in this.WinMDIndexer.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetFields()))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
@@ -16,7 +16,7 @@ public partial class Generator
 			{
 				try
 				{
-					this.volatileCode.GenerationTransaction(delegate
+					this._volatileCode.GenerationTransaction(delegate
 					{
 						this.RequestConstant(fieldDefHandle);
 					});
@@ -62,7 +62,7 @@ public partial class Generator
 			{
 				try
 				{
-					this.volatileCode.GenerationTransaction(delegate
+					this._volatileCode.GenerationTransaction(delegate
 					{
 						this.RequestConstant(fieldHandle);
 					});
@@ -105,7 +105,7 @@ public partial class Generator
 
 		if (matchingFieldHandles.Count == 1)
 		{
-			this.volatileCode.GenerationTransaction(delegate
+			this._volatileCode.GenerationTransaction(delegate
 			{
 				this.RequestConstant(matchingFieldHandles[0]);
 			});
@@ -133,7 +133,7 @@ public partial class Generator
 
 	internal void RequestConstant(FieldDefinitionHandle fieldDefHandle)
 	{
-		this.volatileCode.GenerateConstant(fieldDefHandle, delegate
+		this._volatileCode.GenerateConstant(fieldDefHandle, delegate
 		{
 			FieldDefinition fieldDef = this.Reader.GetFieldDefinition(fieldDefHandle);
 			FieldDeclarationSyntax constantDeclaration = this.DeclareConstant(fieldDef);
@@ -150,7 +150,7 @@ public partial class Generator
 				}
 			}
 
-			this.volatileCode.AddConstant(fieldDefHandle, constantDeclaration, fieldType);
+			this._volatileCode.AddConstant(fieldDefHandle, constantDeclaration, fieldType);
 		});
 	}
 
@@ -265,8 +265,8 @@ public partial class Generator
 		{
 			ArrayTypeHandleInfo { ElementType: PrimitiveTypeHandleInfo { PrimitiveTypeCode: PrimitiveTypeCode.Byte } } pointerType => this.CreateByteArrayConstant(argsAsString),
 			PrimitiveTypeHandleInfo primitiveType => ToExpressionSyntax(primitiveType.PrimitiveTypeCode, argsAsString),
-			HandleTypeHandleInfo handleType => this.CreateConstant(argsAsString, targetType.ToTypeSyntax(this.fieldTypeSettings, GeneratingElement.Constant, null).Type, (TypeReferenceHandle)handleType.Handle, out unsafeRequired),
-			PointerTypeHandleInfo pointerType => CastExpression(pointerType.ToTypeSyntax(this.fieldTypeSettings, GeneratingElement.Constant, null).Type, ParenthesizedExpression(ToExpressionSyntax(PrimitiveTypeCode.UInt64, argsAsString))),
+			HandleTypeHandleInfo handleType => this.CreateConstant(argsAsString, targetType.ToTypeSyntax(this._fieldTypeSettings, GeneratingElement.Constant, null).Type, (TypeReferenceHandle)handleType.Handle, out unsafeRequired),
+			PointerTypeHandleInfo pointerType => CastExpression(pointerType.ToTypeSyntax(this._fieldTypeSettings, GeneratingElement.Constant, null).Type, ParenthesizedExpression(ToExpressionSyntax(PrimitiveTypeCode.UInt64, argsAsString))),
 			_ => throw new GenerationFailedException($"Unsupported constant type: {targetType}"),
 		};
 	}
@@ -287,7 +287,7 @@ public partial class Generator
 			throw new GenerationFailedException("Unrecognized target type.");
 		}
 
-		targetTypeDefHandle.Generator.volatileCode.GenerationTransaction(delegate
+		targetTypeDefHandle.Generator._volatileCode.GenerationTransaction(delegate
 		{
 			targetTypeDefHandle.Generator.RequestInteropType(targetTypeDefHandle.DefinitionHandle, this.DefaultContext);
 		});
@@ -343,7 +343,7 @@ public partial class Generator
 		CustomAttributeValue<TypeSyntax> args = constantAttribute.DecodeValue(CustomAttributeTypeProvider.Instance);
 		return this.CreateConstant(
 			((string)args.FixedArguments[0].Value!).AsMemory(),
-			targetType.ToTypeSyntax(this.fieldTypeSettings, GeneratingElement.Constant, null).Type,
+			targetType.ToTypeSyntax(this._fieldTypeSettings, GeneratingElement.Constant, null).Type,
 			targetTypeRefHandle,
 			out unsafeRequired);
 	}
@@ -355,7 +355,7 @@ public partial class Generator
 		{
 			TypeHandleInfo fieldTypeInfo = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null) with { IsConstantField = true };
 			CustomAttributeHandleCollection customAttributes = fieldDef.GetCustomAttributes();
-			TypeSyntaxAndMarshaling fieldType = fieldTypeInfo.ToTypeSyntax(this.fieldTypeSettings, GeneratingElement.Constant, customAttributes);
+			TypeSyntaxAndMarshaling fieldType = fieldTypeInfo.ToTypeSyntax(this._fieldTypeSettings, GeneratingElement.Constant, customAttributes);
 			bool requiresUnsafe = false;
 			ExpressionSyntax value =
 				fieldDef.GetDefaultValue() is { IsNil: false } constantHandle ? ToExpressionSyntax(this.Reader, constantHandle) :
@@ -419,8 +419,8 @@ public partial class Generator
 
 	private ClassDeclarationSyntax DeclareConstantDefiningClass()
 	{
-		return ClassDeclaration(this.methodsAndConstantsClassName.Identifier)
-			.AddMembers(this.committedCode.TopLevelFields.ToArray())
+		return ClassDeclaration(this._methodsAndConstantsClassName.Identifier)
+			.AddMembers(this._committedCode.TopLevelFields.ToArray())
 			.WithModifiers(TokenList(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.StaticKeyword), TokenWithSpace(SyntaxKind.PartialKeyword)));
 	}
 }

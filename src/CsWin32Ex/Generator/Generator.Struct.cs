@@ -32,14 +32,14 @@ public partial class Generator
 		if (typeDef.GetFields().LastOrDefault() is FieldDefinitionHandle { IsNil: false } lastFieldHandle)
 		{
 			FieldDefinition lastField = this.Reader.GetFieldDefinition(lastFieldHandle);
-			if (WinMDFileHelper.FindAttribute(this.Reader, lastField.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
+			if (WinMDFileHelper.TryGetAttributeOn(this.Reader, lastField.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
 			{
 				flexibleArrayFieldHandle = lastFieldHandle;
 				context = context with { AllowMarshaling = false };
 			}
 		}
 
-		TypeSyntaxSettings typeSettings = context.Filter(this.fieldTypeSettings);
+		TypeSyntaxSettings typeSettings = context.Filter(this._fieldTypeSettings);
 
 		bool hasUtf16CharField = false;
 		var members = new List<MemberDeclarationSyntax>();
@@ -430,7 +430,7 @@ public partial class Generator
 		members.Add(FieldDeclaration(VariableDeclaration(fieldType).AddVariables(VariableDeclarator(firstElementFieldName.Identifier)))
 			.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword)));
 
-		if (this.canUseUnsafeAdd)
+		if (this._canUseUnsafeAdd)
 		{
 			////[MethodImpl(MethodImplOptions.AggressiveInlining)]
 			////get { fixed (int** p = &e0) return *(p + index); }
@@ -512,7 +512,7 @@ public partial class Generator
 
 	private (TypeSyntax FieldType, SyntaxList<MemberDeclarationSyntax> AdditionalMembers, AttributeSyntax? MarshalAsAttribute) ReinterpretFieldType(FieldDefinition fieldDef, TypeSyntax originalType, CustomAttributeHandleCollection customAttributes, Context context)
 	{
-		TypeSyntaxSettings typeSettings = context.Filter(this.fieldTypeSettings);
+		TypeSyntaxSettings typeSettings = context.Filter(this._fieldTypeSettings);
 		TypeHandleInfo fieldTypeHandleInfo = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null);
 		AttributeSyntax? marshalAs = null;
 
@@ -542,15 +542,15 @@ public partial class Generator
 	{
 		if (this.IsWin32Sdk)
 		{
-			if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{this.variableLengthInlineArrayStruct1.Identifier.ValueText}`1"))
+			if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{this._variableLengthInlineArrayStruct1.Identifier.ValueText}`1"))
 			{
 				this.DeclareUnscopedRefAttributeIfNecessary();
-				this.volatileCode.GenerateSpecialType("VariableLengthInlineArray1", () => this.volatileCode.AddSpecialType("VariableLengthInlineArray1", this.variableLengthInlineArrayStruct1));
+				this._volatileCode.GenerateSpecialType("VariableLengthInlineArray1", () => this._volatileCode.AddSpecialType("VariableLengthInlineArray1", this._variableLengthInlineArrayStruct1));
 			}
 		}
 		else if (this.Manager is not null && this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 		{
-			generator.volatileCode.GenerationTransaction(delegate
+			generator._volatileCode.GenerationTransaction(delegate
 			{
 				generator.RequestVariableLengthInlineArrayHelper1(context);
 			});
@@ -564,12 +564,12 @@ public partial class Generator
 			if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{this.variableLengthInlineArrayStruct2.Identifier.ValueText}`2"))
 			{
 				this.DeclareUnscopedRefAttributeIfNecessary();
-				this.volatileCode.GenerateSpecialType("VariableLengthInlineArray2", () => this.volatileCode.AddSpecialType("VariableLengthInlineArray2", this.variableLengthInlineArrayStruct2));
+				this._volatileCode.GenerateSpecialType("VariableLengthInlineArray2", () => this._volatileCode.AddSpecialType("VariableLengthInlineArray2", this.variableLengthInlineArrayStruct2));
 			}
 		}
 		else if (this.Manager is not null && this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 		{
-			generator.volatileCode.GenerationTransaction(delegate
+			generator._volatileCode.GenerationTransaction(delegate
 			{
 				generator.RequestVariableLengthInlineArrayHelper2(context);
 			});

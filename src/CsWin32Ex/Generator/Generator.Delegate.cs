@@ -11,7 +11,7 @@ public partial class Generator
 		if (delegateType.Generator != this)
 		{
 			FunctionPointerTypeSyntax? result = null;
-			delegateType.Generator.volatileCode.GenerationTransaction(() => result = delegateType.Generator.FunctionPointer(delegateType.Definition));
+			delegateType.Generator._volatileCode.GenerationTransaction(() => result = delegateType.Generator.FunctionPointer(delegateType.Definition));
 			return result!;
 		}
 		else
@@ -37,13 +37,13 @@ public partial class Generator
 
 	private DelegateDeclarationSyntax DeclareDelegate(TypeDefinition typeDef)
 	{
-		if (!this.options.AllowMarshaling)
+		if (!this._options.AllowMarshaling)
 		{
 			throw new NotSupportedException("Delegates are not declared while in all-structs mode.");
 		}
 
 		string name = this.Reader.GetString(typeDef.Name);
-		TypeSyntaxSettings typeSettings = this.delegateSignatureTypeSettings;
+		TypeSyntaxSettings typeSettings = this._delegateSignatureTypeSettings;
 
 		CallingConvention? callingConvention = null;
 		if (this.FindAttribute(typeDef.GetCustomAttributes(), SystemRuntimeInteropServices, nameof(UnmanagedFunctionPointerAttribute)) is CustomAttribute att)
@@ -79,17 +79,17 @@ public partial class Generator
 
 		// internal T CreateDelegate<T>() => Marshal.GetDelegateForFunctionPointer<T>(this.Value);
 		IdentifierNameSyntax typeParameter = IdentifierName("TDelegate");
-		MemberAccessExpressionSyntax methodToCall = this.getDelegateForFunctionPointerGenericExists
+		MemberAccessExpressionSyntax methodToCall = this._getDelegateForFunctionPointerGenericExists
 			? MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName(nameof(Marshal)), GenericName(nameof(Marshal.GetDelegateForFunctionPointer)).AddTypeArgumentListArguments(typeParameter))
 			: MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName(nameof(Marshal)), IdentifierName(nameof(Marshal.GetDelegateForFunctionPointer)));
 		ArgumentListSyntax arguments = ArgumentList().AddArguments(Argument(MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), valueFieldName)));
-		if (!this.getDelegateForFunctionPointerGenericExists)
+		if (!this._getDelegateForFunctionPointerGenericExists)
 		{
 			arguments = arguments.AddArguments(Argument(TypeOfExpression(typeParameter)));
 		}
 
 		ExpressionSyntax bodyExpression = InvocationExpression(methodToCall, arguments);
-		if (!this.getDelegateForFunctionPointerGenericExists)
+		if (!this._getDelegateForFunctionPointerGenericExists)
 		{
 			bodyExpression = CastExpression(typeParameter, bodyExpression);
 		}
@@ -148,6 +148,6 @@ public partial class Generator
 			return FunctionPointerParameter(delegateTypeDef.Generator.FunctionPointer(delegateTypeDef.Definition));
 		}
 
-		return FunctionPointerParameter(parameterTypeInfo.ToTypeSyntax(this.functionPointerTypeSettings, GeneratingElement.FunctionPointer, customAttributeHandles).GetUnmarshaledType());
+		return FunctionPointerParameter(parameterTypeInfo.ToTypeSyntax(this._functionPointerTypeSettings, GeneratingElement.FunctionPointer, customAttributeHandles).GetUnmarshaledType());
 	}
 }

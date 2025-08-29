@@ -8,24 +8,24 @@ namespace CsWin32Ex;
 [DebuggerDisplay("{" + nameof(DebuggerDisplayString) + ",nq}")]
 public partial class Generator : IGenerator, IDisposable
 {
-	private readonly TypeSyntaxSettings generalTypeSettings;
-	private readonly TypeSyntaxSettings fieldTypeSettings;
-	private readonly TypeSyntaxSettings delegateSignatureTypeSettings;
-	private readonly TypeSyntaxSettings enumTypeSettings;
-	private readonly TypeSyntaxSettings fieldOfHandleTypeDefTypeSettings;
-	private readonly TypeSyntaxSettings externSignatureTypeSettings;
-	private readonly TypeSyntaxSettings externReleaseSignatureTypeSettings;
-	private readonly TypeSyntaxSettings comSignatureTypeSettings;
-	private readonly TypeSyntaxSettings extensionMethodSignatureTypeSettings;
-	private readonly TypeSyntaxSettings functionPointerTypeSettings;
-	private readonly TypeSyntaxSettings errorMessageTypeSettings;
+	private readonly TypeSyntaxSettings _generalTypeSettings;
+	private readonly TypeSyntaxSettings _fieldTypeSettings;
+	private readonly TypeSyntaxSettings _delegateSignatureTypeSettings;
+	private readonly TypeSyntaxSettings _enumTypeSettings;
+	private readonly TypeSyntaxSettings _fieldOfHandleTypeDefTypeSettings;
+	private readonly TypeSyntaxSettings _externSignatureTypeSettings;
+	private readonly TypeSyntaxSettings _externReleaseSignatureTypeSettings;
+	private readonly TypeSyntaxSettings _comSignatureTypeSettings;
+	private readonly TypeSyntaxSettings _extensionMethodSignatureTypeSettings;
+	private readonly TypeSyntaxSettings _functionPointerTypeSettings;
+	private readonly TypeSyntaxSettings _errorMessageTypeSettings;
 
-	private readonly ClassDeclarationSyntax comHelperClass;
+	private readonly ClassDeclarationSyntax _comHelperClass;
 
 	/// <summary>
 	/// The struct with one type parameter used to represent a variable-length inline array.
 	/// </summary>
-	private readonly StructDeclarationSyntax variableLengthInlineArrayStruct1;
+	private readonly StructDeclarationSyntax _variableLengthInlineArrayStruct1;
 
 	/// <summary>
 	/// The struct with two type parameters used to represent a variable-length inline array.
@@ -33,22 +33,22 @@ public partial class Generator : IGenerator, IDisposable
 	/// </summary>
 	private readonly StructDeclarationSyntax variableLengthInlineArrayStruct2;
 
-	private readonly Dictionary<string, IReadOnlyList<ISymbol>> findTypeSymbolIfAlreadyAvailableCache = new(StringComparer.Ordinal);
-	private readonly WinMDReaderRental metadataReader;
-	private readonly GeneratorOptions options;
-	private readonly CSharpCompilation? compilation;
-	private readonly CSharpParseOptions? parseOptions;
-	private readonly bool comIIDInterfacePredefined;
-	private readonly bool getDelegateForFunctionPointerGenericExists;
-	private readonly GeneratedCode committedCode = new();
-	private readonly GeneratedCode volatileCode;
-	private readonly IdentifierNameSyntax methodsAndConstantsClassName;
-	private readonly HashSet<string> injectedPInvokeHelperMethods = new();
-	private readonly HashSet<string> injectedPInvokeMacros = new();
-	private readonly Dictionary<TypeDefinitionHandle, bool> managedTypesCheck = new();
-	private MethodDeclarationSyntax? sliceAtNullMethodDecl;
+	private readonly Dictionary<string, IReadOnlyList<ISymbol>> _findTypeSymbolIfAlreadyAvailableCache = new(StringComparer.Ordinal);
+	private readonly WinMDReaderRental _winMDReaderRental;
+	private readonly GeneratorOptions _options;
+	private readonly CSharpCompilation? _compilation;
+	private readonly CSharpParseOptions? _parseOptions;
+	private readonly bool _comIIDInterfacePredefined;
+	private readonly bool _getDelegateForFunctionPointerGenericExists;
+	private readonly GeneratedCode _committedCode = new();
+	private readonly GeneratedCode _volatileCode;
+	private readonly IdentifierNameSyntax _methodsAndConstantsClassName;
+	private readonly HashSet<string> _injectedPInvokeHelperMethods = [];
+	private readonly HashSet<string> _injectedPInvokeMacros = [];
+	private readonly Dictionary<TypeDefinitionHandle, bool> _managedTypesCheck = [];
+	private MethodDeclarationSyntax? _sliceAtNullMethodDecl;
 
-	internal ImmutableDictionary<string, string> BannedAPIs => GetBannedAPIs(this.options);
+	internal ImmutableDictionary<string, string> BannedAPIs => GetBannedAPIs(_options);
 
 	internal GeneratorManager? Manager { get; set; }
 
@@ -73,36 +73,36 @@ public partial class Generator : IGenerator, IDisposable
 		}
 	}
 
-	internal GeneratorOptions Options => this.options;
+	internal GeneratorOptions Options => _options;
 
-	internal string InputAssemblyName => this.MetadataIndex.WinMDAssemblyName;
+	internal string InputAssemblyName => WinMDIndexer.WinMDAssemblyName;
 
-	internal WinMDFileIndexer MetadataIndex { get; }
+	internal WinMDFileIndexer WinMDIndexer { get; }
 
-	internal MetadataReader Reader => this.metadataReader.Value;
+	internal MetadataReader Reader => _winMDReaderRental.Value;
 
-	internal LanguageVersion LanguageVersion => this.parseOptions?.LanguageVersion ?? LanguageVersion.CSharp9;
+	internal LanguageVersion LanguageVersion => this._parseOptions?.LanguageVersion ?? LanguageVersion.CSharp9;
 
 	/// <summary>
 	/// Gets the default generation context to use.
 	/// </summary>
-	internal Context DefaultContext => new() { AllowMarshaling = this.options.AllowMarshaling };
+	internal Context DefaultContext => new() { AllowMarshaling = _options.AllowMarshaling };
 
 	private HashSet<string> AppLocalLibraries { get; }
 
-	private bool WideCharOnly => this.options.WideCharOnly;
+	private bool WideCharOnly => _options.WideCharOnly;
 
-	private string Namespace => this.MetadataIndex.CommonNamespace;
+	private string Namespace => WinMDIndexer.CommonNamespace;
 
-	private SyntaxKind Visibility => this.options.Public ? SyntaxKind.PublicKeyword : SyntaxKind.InternalKeyword;
+	private SyntaxKind Visibility => _options.Public ? SyntaxKind.PublicKeyword : SyntaxKind.InternalKeyword;
 
-	private bool IsWin32Sdk => string.Equals(this.MetadataIndex.WinMDAssemblyName, "Windows.Win32", StringComparison.OrdinalIgnoreCase);
+	private bool IsWin32Sdk => string.Equals(WinMDIndexer.WinMDAssemblyName, "Windows.Win32", StringComparison.OrdinalIgnoreCase);
 
 	private IEnumerable<MemberDeclarationSyntax> NamespaceMembers
 	{
 		get
 		{
-			IEnumerable<IGrouping<string, MemberDeclarationSyntax>> members = this.committedCode.MembersByModule;
+			IEnumerable<IGrouping<string, MemberDeclarationSyntax>> members = this._committedCode.MembersByModule;
 			IEnumerable<MemberDeclarationSyntax> result = Enumerable.Empty<MemberDeclarationSyntax>();
 			int i = 0;
 			foreach (IGrouping<string, MemberDeclarationSyntax> entry in members)
@@ -123,18 +123,18 @@ public partial class Generator : IGenerator, IDisposable
 			}
 
 			ClassDeclarationSyntax macrosPartialClass = DeclarePInvokeClass("Macros")
-				.AddMembers(this.committedCode.Macros.ToArray())
+				.AddMembers(this._committedCode.Macros.ToArray())
 				.WithLeadingTrivia(ParseLeadingTrivia(PartialPInvokeMacrosContentComment));
 			if (macrosPartialClass.Members.Count > 0)
 			{
 				result = result.Concat(new MemberDeclarationSyntax[] { macrosPartialClass });
 			}
 
-			ClassDeclarationSyntax DeclarePInvokeClass(string fileNameKey) => ClassDeclaration(Identifier(this.options.ClassName))
+			ClassDeclarationSyntax DeclarePInvokeClass(string fileNameKey) => ClassDeclaration(Identifier(this._options.ClassName))
 				.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.StaticKeyword), TokenWithSpace(SyntaxKind.PartialKeyword))
-				.WithAdditionalAnnotations(new SyntaxAnnotation(SimpleFileNameAnnotation, $"{this.options.ClassName}.{fileNameKey}"));
+				.WithAdditionalAnnotations(new SyntaxAnnotation(SimpleFileNameAnnotation, $"{this._options.ClassName}.{fileNameKey}"));
 
-			result = result.Concat(this.committedCode.GeneratedTypes);
+			result = result.Concat(this._committedCode.GeneratedTypes);
 
 			ClassDeclarationSyntax inlineArrayIndexerExtensionsClass = this.DeclareInlineArrayIndexerExtensionsClass();
 			if (inlineArrayIndexerExtensionsClass.Members.Count > 0)
@@ -142,9 +142,9 @@ public partial class Generator : IGenerator, IDisposable
 				result = result.Concat(new MemberDeclarationSyntax[] { inlineArrayIndexerExtensionsClass });
 			}
 
-			result = result.Concat(this.committedCode.ComInterfaceExtensions);
+			result = result.Concat(this._committedCode.ComInterfaceExtensions);
 
-			if (this.committedCode.TopLevelFields.Any())
+			if (this._committedCode.TopLevelFields.Any())
 			{
 				result = result.Concat(new MemberDeclarationSyntax[] { this.DeclareConstantDefiningClass() });
 			}
@@ -153,21 +153,17 @@ public partial class Generator : IGenerator, IDisposable
 		}
 	}
 
-	private string DebuggerDisplayString => $"Generator: {this.InputAssemblyName}";
+	private string DebuggerDisplayString => $"Generator: {InputAssemblyName}";
 
 	static Generator()
 	{
 		if (!TryFetchTemplate("PInvokeClassHelperMethods", null, out MemberDeclarationSyntax? member))
-		{
 			throw new GenerationFailedException("Missing embedded resource.");
-		}
 
 		PInvokeHelperMethods = ((ClassDeclarationSyntax)member).Members.OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m);
 
 		if (!TryFetchTemplate("PInvokeClassMacros", null, out member))
-		{
 			throw new GenerationFailedException("Missing embedded resource.");
-		}
 
 		Win32SdkMacros = ((ClassDeclarationSyntax)member).Members.OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m);
 
@@ -179,105 +175,99 @@ public partial class Generator : IGenerator, IDisposable
 	/// Initializes a new instance of the <see cref="Generator"/> class.
 	/// </summary>
 	/// <param name="winMDPath">The path to the winmd metadata to generate APIs from.</param>
-	/// <param name="docs">The API docs to include in the generated code.</param>
+	/// <param name="apiDocs">The API docs to include in the generated code.</param>
 	/// <param name="additionalAppLocalLibraries">The library file names (e.g. some.dll) that should be allowed as app-local.</param>
 	/// <param name="options">Options that influence the result of generation.</param>
 	/// <param name="compilation">The compilation that the generated code will be added to.</param>
 	/// <param name="parseOptions">The parse options that will be used for the generated code.</param>
-	public Generator(string winMDPath, Docs? docs, IEnumerable<string> additionalAppLocalLibraries, GeneratorOptions options, CSharpCompilation? compilation = null, CSharpParseOptions? parseOptions = null)
+	public Generator(string winMDPath, Docs? apiDocs, IEnumerable<string> additionalAppLocalLibraries, GeneratorOptions options, CSharpCompilation? compilation = null, CSharpParseOptions? parseOptions = null)
 	{
-		WinMDFile metadataFile = WinMDFile.Create(winMDPath);
-		this.MetadataIndex = metadataFile.GetWinMDIndex(compilation?.Options.Platform);
-		this.metadataReader = metadataFile.RentWinMDReader();
+		// Initialize the WinMD reader and indexer.
+		WinMDFile winMDFile = WinMDFile.Create(winMDPath);
+		WinMDIndexer = winMDFile.GetWinMDIndexer(compilation?.Options.Platform);
+		_winMDReaderRental = winMDFile.RentWinMDReader();
 
-		this.ApiDocs = docs;
+		// Initialize the API docs
+		ApiDocs = apiDocs;
 
-		this.AppLocalLibraries = new(BuiltInAppLocalLibraries, StringComparer.OrdinalIgnoreCase);
-		this.AppLocalLibraries.UnionWith(additionalAppLocalLibraries);
+		// Initializes the native libraries along with the default native libraries that are allowed as app-local.
+		AppLocalLibraries = new(BuiltInAppLocalLibraries, StringComparer.OrdinalIgnoreCase);
+		AppLocalLibraries.UnionWith(additionalAppLocalLibraries);
 
-		this.options = options;
-		this.options.Validate();
-		this.compilation = compilation;
-		this.parseOptions = parseOptions;
-		this.volatileCode = new(this.committedCode);
+		// Initialize the options
+		_options = options;
+		_compilation = compilation;
+		_parseOptions = parseOptions;
+		_volatileCode = new(_committedCode);
 
-		// UnscopedRefAttribute may be emitted to work on downlevel *runtimes*, but we can't use it
-		// on downlevel *compilers*. Only .NET 8+ SDK compilers support it. Since we cannot detect
-		// compiler version, we use language version instead.
-		this.canUseUnscopedRef = this.parseOptions?.LanguageVersion >= (LanguageVersion)1100; // C# 11.0
-
-		this.canUseSpan = this.compilation?.GetTypeByMetadataName(typeof(Span<>).FullName) is not null;
-		this.canCallCreateSpan = this.compilation?.GetTypeByMetadataName(typeof(MemoryMarshal).FullName)?.GetMembers("CreateSpan").Any() is true;
-		this.canUseUnsafeAsRef = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("Add").Any() is true;
-		this.canUseUnsafeAdd = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("AsRef").Any() is true;
-		this.canUseUnsafeNullRef = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("NullRef").Any() is true;
-		this.canUseUnsafeSkipInit = this.compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("SkipInit").Any() is true;
-		this.canUseUnmanagedCallersOnlyAttribute = this.FindTypeSymbolsIfAlreadyAvailable("System.Runtime.InteropServices.UnmanagedCallersOnlyAttribute").Count > 0;
-		this.canUseSetLastPInvokeError = this.compilation?.GetTypeByMetadataName("System.Runtime.InteropServices.Marshal")?.GetMembers("GetLastSystemError").IsEmpty is false;
-		this.unscopedRefAttributePredefined = this.FindTypeSymbolIfAlreadyAvailable("System.Diagnostics.CodeAnalysis.UnscopedRefAttribute") is not null;
-		this.overloadResolutionPriorityAttributePredefined = this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute") is not null;
-		this.runtimeFeatureClass = (INamedTypeSymbol?)this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.CompilerServices.RuntimeFeature");
-		this.comIIDInterfacePredefined = this.FindTypeSymbolIfAlreadyAvailable($"{this.Namespace}.{IComIIDGuidInterfaceName}") is not null;
-		this.getDelegateForFunctionPointerGenericExists = this.compilation?.GetTypeByMetadataName(typeof(Marshal).FullName)?.GetMembers(nameof(Marshal.GetDelegateForFunctionPointer)).Any(m => m is IMethodSymbol { IsGenericMethod: true }) is true;
-		this.generateDefaultDllImportSearchPathsAttribute = this.compilation?.GetTypeByMetadataName(typeof(DefaultDllImportSearchPathsAttribute).FullName) is object;
-		if (this.FindTypeSymbolIfAlreadyAvailable("System.Runtime.Versioning.SupportedOSPlatformAttribute") is { } attribute)
+		_canUseUnscopedRef = _parseOptions?.LanguageVersion >= (LanguageVersion)1100; // C# 11.0
+		_canUseSpan = _compilation?.GetTypeByMetadataName(typeof(Span<>).FullName) is not null;
+		_canCallCreateSpan = _compilation?.GetTypeByMetadataName(typeof(MemoryMarshal).FullName)?.GetMembers("CreateSpan").Any() is true;
+		_canUseUnsafeAsRef = _compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("Add").Any() is true;
+		_canUseUnsafeAdd = _compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("AsRef").Any() is true;
+		_canUseUnsafeNullRef = _compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("NullRef").Any() is true;
+		_canUseUnsafeSkipInit = _compilation?.GetTypeByMetadataName(typeof(Unsafe).FullName)?.GetMembers("SkipInit").Any() is true;
+		_canUseUnmanagedCallersOnlyAttribute = FindTypeSymbolsIfAlreadyAvailable("System.Runtime.InteropServices.UnmanagedCallersOnlyAttribute").Count > 0;
+		_canUseSetLastPInvokeError = _compilation?.GetTypeByMetadataName("System.Runtime.InteropServices.Marshal")?.GetMembers("GetLastSystemError").IsEmpty is false;
+		_unscopedRefAttributePredefined = FindTypeSymbolIfAlreadyAvailable("System.Diagnostics.CodeAnalysis.UnscopedRefAttribute") is not null;
+		_overloadResolutionPriorityAttributePredefined = FindTypeSymbolIfAlreadyAvailable("System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute") is not null;
+		_runtimeFeatureClass = (INamedTypeSymbol?)FindTypeSymbolIfAlreadyAvailable("System.Runtime.CompilerServices.RuntimeFeature");
+		_comIIDInterfacePredefined = FindTypeSymbolIfAlreadyAvailable($"{Namespace}.{IComIIDGuidInterfaceName}") is not null;
+		_getDelegateForFunctionPointerGenericExists = _compilation?.GetTypeByMetadataName(typeof(Marshal).FullName)?.GetMembers(nameof(Marshal.GetDelegateForFunctionPointer)).Any(m => m is IMethodSymbol { IsGenericMethod: true }) is true;
+		_generateDefaultDllImportSearchPathsAttribute = _compilation?.GetTypeByMetadataName(typeof(DefaultDllImportSearchPathsAttribute).FullName) is object;
+		if (FindTypeSymbolIfAlreadyAvailable("System.Runtime.Versioning.SupportedOSPlatformAttribute") is { } attribute)
 		{
-			this.generateSupportedOSPlatformAttributes = true;
+			_generateSupportedOSPlatformAttributes = true;
 			AttributeData usageAttribute = attribute.GetAttributes().Single(att => att.AttributeClass?.Name == nameof(AttributeUsageAttribute));
 			var targets = (AttributeTargets)usageAttribute.ConstructorArguments[0].Value!;
-			this.generateSupportedOSPlatformAttributesOnInterfaces = (targets & AttributeTargets.Interface) == AttributeTargets.Interface;
+			_generateSupportedOSPlatformAttributesOnInterfaces = (targets & AttributeTargets.Interface) == AttributeTargets.Interface;
 		}
 
 		// Convert some of our CanUse fields to preprocessor symbols so our templates can use them.
-		if (this.parseOptions is not null)
+		if (_parseOptions is not null)
 		{
-			List<string> extraSymbols = new();
-			AddSymbolIf(this.canUseSpan, "canUseSpan");
-			AddSymbolIf(this.canCallCreateSpan, "canCallCreateSpan");
-			AddSymbolIf(this.canUseUnsafeAsRef, "canUseUnsafeAsRef");
-			AddSymbolIf(this.canUseUnsafeAdd, "canUseUnsafeAdd");
-			AddSymbolIf(this.canUseUnsafeNullRef, "canUseUnsafeNullRef");
+			List<string> extraSymbols = [];
+			AddSymbolIf(_canUseSpan, "canUseSpan");
+			AddSymbolIf(_canCallCreateSpan, "canCallCreateSpan");
+			AddSymbolIf(_canUseUnsafeAsRef, "canUseUnsafeAsRef");
+			AddSymbolIf(_canUseUnsafeAdd, "canUseUnsafeAdd");
+			AddSymbolIf(_canUseUnsafeNullRef, "canUseUnsafeNullRef");
 			AddSymbolIf(compilation?.GetTypeByMetadataName("System.Drawing.Point") is not null, "canUseSystemDrawing");
-			AddSymbolIf(this.IsFeatureAvailable(Feature.InterfaceStaticMembers), "canUseInterfaceStaticMembers");
-			AddSymbolIf(this.canUseUnscopedRef, "canUseUnscopedRef");
+			AddSymbolIf(IsFeatureAvailable(Feature.InterfaceStaticMembers), "canUseInterfaceStaticMembers");
+			AddSymbolIf(_canUseUnscopedRef, "canUseUnscopedRef");
 
 			if (extraSymbols.Count > 0)
-			{
-				this.parseOptions = this.parseOptions.WithPreprocessorSymbols(this.parseOptions.PreprocessorSymbolNames.Concat(extraSymbols));
-			}
+				_parseOptions = _parseOptions.WithPreprocessorSymbols(_parseOptions.PreprocessorSymbolNames.Concat(extraSymbols));
 
 			void AddSymbolIf(bool condition, string symbol)
 			{
-				if (condition)
-				{
-					extraSymbols.Add(symbol);
-				}
+				if (condition) extraSymbols.Add(symbol);
 			}
 		}
 
 		bool useComInterfaces = options.AllowMarshaling;
-		this.generalTypeSettings = new TypeSyntaxSettings(
+		_generalTypeSettings = new TypeSyntaxSettings(
 			this,
-			PreferNativeInt: this.LanguageVersion >= LanguageVersion.CSharp9,
+			PreferNativeInt: LanguageVersion >= LanguageVersion.CSharp9,
 			PreferMarshaledTypes: false,
 			AllowMarshaling: options.AllowMarshaling,
 			QualifyNames: false);
-		this.fieldTypeSettings = this.generalTypeSettings with { QualifyNames = true, IsField = true };
-		this.delegateSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true };
-		this.enumTypeSettings = this.generalTypeSettings;
-		this.fieldOfHandleTypeDefTypeSettings = this.generalTypeSettings with { PreferNativeInt = false };
-		this.externSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true, PreferMarshaledTypes = options.AllowMarshaling };
-		this.externReleaseSignatureTypeSettings = this.externSignatureTypeSettings with { PreferNativeInt = false, PreferMarshaledTypes = false };
-		this.comSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true, PreferInOutRef = options.AllowMarshaling };
-		this.extensionMethodSignatureTypeSettings = this.generalTypeSettings with { QualifyNames = true };
-		this.functionPointerTypeSettings = this.generalTypeSettings with { QualifyNames = true, AvoidWinmdRootAlias = true, AllowMarshaling = false };
-		this.errorMessageTypeSettings = this.generalTypeSettings with { QualifyNames = true, Generator = null }; // Avoid risk of infinite recursion from errors in ToTypeSyntax
+		_fieldTypeSettings = _generalTypeSettings with { QualifyNames = true, IsField = true };
+		_delegateSignatureTypeSettings = _generalTypeSettings with { QualifyNames = true };
+		_enumTypeSettings = _generalTypeSettings;
+		_fieldOfHandleTypeDefTypeSettings = _generalTypeSettings with { PreferNativeInt = false };
+		_externSignatureTypeSettings = _generalTypeSettings with { QualifyNames = true, PreferMarshaledTypes = options.AllowMarshaling };
+		_externReleaseSignatureTypeSettings = _externSignatureTypeSettings with { PreferNativeInt = false, PreferMarshaledTypes = false };
+		_comSignatureTypeSettings = _generalTypeSettings with { QualifyNames = true, PreferInOutRef = options.AllowMarshaling };
+		_extensionMethodSignatureTypeSettings = _generalTypeSettings with { QualifyNames = true };
+		_functionPointerTypeSettings = _generalTypeSettings with { QualifyNames = true, AvoidWinmdRootAlias = true, AllowMarshaling = false };
+		_errorMessageTypeSettings = _generalTypeSettings with { QualifyNames = true, Generator = null }; // Avoid risk of infinite recursion from errors in ToTypeSyntax
 
-		this.methodsAndConstantsClassName = IdentifierName(options.ClassName);
+		_methodsAndConstantsClassName = IdentifierName(options.ClassName);
 
-		FetchTemplate("ComHelpers", this, out this.comHelperClass);
-		FetchTemplate("VariableLengthInlineArray`1", this, out this.variableLengthInlineArrayStruct1);
-		FetchTemplate("VariableLengthInlineArray`2", this, out this.variableLengthInlineArrayStruct2);
+		FetchTemplate("ComHelpers", this, out _comHelperClass);
+		FetchTemplate("VariableLengthInlineArray`1", this, out _variableLengthInlineArrayStruct1);
+		FetchTemplate("VariableLengthInlineArray`2", this, out variableLengthInlineArrayStruct2);
 	}
 
 	/// <summary>
@@ -414,12 +404,12 @@ public partial class Generator : IGenerator, IDisposable
 		}
 
 		NamespaceMetadata? metadata;
-		if (!this.MetadataIndex.MetadataByNamespace.TryGetValue(@namespace, out metadata))
+		if (!this.WinMDIndexer.MetadataByNamespace.TryGetValue(@namespace, out metadata))
 		{
 			// Fallback to case insensitive search if it looks promising to do so.
-			if (@namespace.StartsWith(this.MetadataIndex.CommonNamespace, StringComparison.OrdinalIgnoreCase))
+			if (@namespace.StartsWith(this.WinMDIndexer.CommonNamespace, StringComparison.OrdinalIgnoreCase))
 			{
-				foreach (KeyValuePair<string, NamespaceMetadata> item in this.MetadataIndex.MetadataByNamespace)
+				foreach (KeyValuePair<string, NamespaceMetadata> item in this.WinMDIndexer.MetadataByNamespace)
 				{
 					if (string.Equals(item.Key, @namespace, StringComparison.OrdinalIgnoreCase))
 					{
@@ -433,7 +423,7 @@ public partial class Generator : IGenerator, IDisposable
 
 		if (metadata is object)
 		{
-			this.volatileCode.GenerationTransaction(delegate
+			this._volatileCode.GenerationTransaction(delegate
 			{
 				foreach (KeyValuePair<string, MethodDefinitionHandle> method in metadata.Methods)
 				{
@@ -474,7 +464,7 @@ public partial class Generator : IGenerator, IDisposable
 
 			try
 			{
-				this.volatileCode.GenerationTransaction(delegate
+				this._volatileCode.GenerationTransaction(delegate
 				{
 					this.RequestMacro(macro.Value);
 				});
@@ -508,7 +498,7 @@ public partial class Generator : IGenerator, IDisposable
 			{
 				try
 				{
-					this.volatileCode.GenerationTransaction(delegate
+					this._volatileCode.GenerationTransaction(delegate
 					{
 						this.RequestInteropType(typeDefinitionHandle, this.DefaultContext);
 					});
@@ -548,7 +538,7 @@ public partial class Generator : IGenerator, IDisposable
 
 		if (matchingTypeHandles.Count == 1)
 		{
-			this.volatileCode.GenerationTransaction(delegate
+			this._volatileCode.GenerationTransaction(delegate
 			{
 				this.RequestInteropType(matchingTypeHandles[0], this.DefaultContext);
 			});
@@ -571,14 +561,14 @@ public partial class Generator : IGenerator, IDisposable
 		if (this.InputAssemblyName.Equals("Windows.Win32", StringComparison.OrdinalIgnoreCase) && SpecialTypeDefNames.Contains(typeName))
 		{
 			string? fullyQualifiedName = null;
-			this.volatileCode.GenerationTransaction(() => this.RequestSpecialTypeDefStruct(typeName, out fullyQualifiedName));
+			this._volatileCode.GenerationTransaction(() => this.RequestSpecialTypeDefStruct(typeName, out fullyQualifiedName));
 			preciseApi = ImmutableList.Create(fullyQualifiedName!);
 			return true;
 		}
 
 		if (foundApiWithMismatchedPlatform)
 		{
-			throw new PlatformIncompatibleException($"The requested API ({possiblyQualifiedName}) was found but is not available given the target platform ({this.compilation?.Options.Platform}).");
+			throw new PlatformIncompatibleException($"The requested API ({possiblyQualifiedName}) was found but is not available given the target platform ({this._compilation?.Options.Platform}).");
 		}
 
 		preciseApi = ImmutableList<string>.Empty;
@@ -604,7 +594,7 @@ public partial class Generator : IGenerator, IDisposable
 			return false;
 		}
 
-		this.volatileCode.GenerationTransaction(delegate
+		this._volatileCode.GenerationTransaction(delegate
 		{
 			this.RequestMacro(macro);
 		});
@@ -633,7 +623,7 @@ public partial class Generator : IGenerator, IDisposable
 
 		// We should match on any API for which the given string is a substring.
 		List<string> suggestions = new();
-		foreach (NamespaceMetadata nsMetadata in this.MetadataIndex.MetadataByNamespace.Values)
+		foreach (NamespaceMetadata nsMetadata in this.WinMDIndexer.MetadataByNamespace.Values)
 		{
 			foreach (string candidate in nsMetadata.Fields.Keys.Concat(nsMetadata.Types.Keys).Concat(nsMetadata.Methods.Keys))
 			{
@@ -650,7 +640,7 @@ public partial class Generator : IGenerator, IDisposable
 	/// <inheritdoc/>
 	public IEnumerable<KeyValuePair<string, CompilationUnitSyntax>> GetCompilationUnits(CancellationToken cancellationToken)
 	{
-		if (this.committedCode.IsEmpty)
+		if (this._committedCode.IsEmpty)
 		{
 			return ImmutableDictionary<string, CompilationUnitSyntax>.Empty;
 		}
@@ -671,18 +661,18 @@ public partial class Generator : IGenerator, IDisposable
 						: nsContents.ToArray());
 		}
 
-		if (this.options.EmitSingleFile)
+		if (this._options.EmitSingleFile)
 		{
 			CompilationUnitSyntax file = CompilationUnit()
 				.AddMembers(starterNamespace.AddMembers(GroupMembersByNamespace(this.NamespaceMembers).ToArray()))
-				.AddMembers(this.committedCode.GeneratedTopLevelTypes.ToArray());
+				.AddMembers(this._committedCode.GeneratedTopLevelTypes.ToArray());
 			results.Add(
 				string.Format(CultureInfo.InvariantCulture, FilenamePattern, "NativeMethods"),
 				file);
 		}
 		else
 		{
-			foreach (MemberDeclarationSyntax topLevelType in this.committedCode.GeneratedTopLevelTypes)
+			foreach (MemberDeclarationSyntax topLevelType in this._committedCode.GeneratedTopLevelTypes)
 			{
 				string typeName = topLevelType.DescendantNodesAndSelf().OfType<BaseTypeDeclarationSyntax>().First().Identifier.ValueText;
 				results.Add(
@@ -730,12 +720,12 @@ public partial class Generator : IGenerator, IDisposable
 			UsingDirective(ParseName(GlobalNamespacePrefix + SystemRuntimeInteropServices)),
 		};
 
-		if (this.generateSupportedOSPlatformAttributes)
+		if (this._generateSupportedOSPlatformAttributes)
 		{
 			usingDirectives.Add(UsingDirective(ParseName(GlobalNamespacePrefix + "System.Runtime.Versioning")));
 		}
 
-		usingDirectives.Add(UsingDirective(NameEquals(GlobalWinmdRootNamespaceAlias), ParseName(GlobalNamespacePrefix + this.MetadataIndex.CommonNamespace)));
+		usingDirectives.Add(UsingDirective(NameEquals(GlobalWinmdRootNamespaceAlias), ParseName(GlobalNamespacePrefix + this.WinMDIndexer.CommonNamespace)));
 
 		var normalizedResults = new Dictionary<string, CompilationUnitSyntax>(StringComparer.OrdinalIgnoreCase);
 		results.AsParallel().WithCancellation(cancellationToken).ForAll(kv =>
@@ -751,9 +741,9 @@ public partial class Generator : IGenerator, IDisposable
 			}
 		});
 
-		if (this.compilation?.GetTypeByMetadataName("System.Reflection.AssemblyMetadataAttribute") is not null)
+		if (this._compilation?.GetTypeByMetadataName("System.Reflection.AssemblyMetadataAttribute") is not null)
 		{
-			if (this.options.EmitSingleFile)
+			if (this._options.EmitSingleFile)
 			{
 				KeyValuePair<string, CompilationUnitSyntax> originalEntry = normalizedResults.Single();
 				normalizedResults[originalEntry.Key] = originalEntry.Value.WithLeadingTrivia().AddAttributeLists(CsWin32StampAttribute).WithLeadingTrivia(originalEntry.Value.GetLeadingTrivia());
@@ -764,7 +754,7 @@ public partial class Generator : IGenerator, IDisposable
 			}
 		}
 
-		if (this.committedCode.NeedsWinRTCustomMarshaler)
+		if (this._committedCode.NeedsWinRTCustomMarshaler)
 		{
 			string? marshalerText = FetchTemplateText(WinRTCustomMarshalerClass);
 			if (marshalerText == null)
@@ -815,22 +805,22 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		if (this.IsWin32Sdk)
 		{
-			if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{this.comHelperClass.Identifier.ValueText}"))
+			if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{this._comHelperClass.Identifier.ValueText}"))
 			{
 				this.RequestInteropType("Windows.Win32.Foundation", "HRESULT", context);
-				this.volatileCode.GenerateSpecialType("ComHelpers", () => this.volatileCode.AddSpecialType("ComHelpers", this.comHelperClass));
+				this._volatileCode.GenerateSpecialType("ComHelpers", () => this._volatileCode.AddSpecialType("ComHelpers", this._comHelperClass));
 			}
 
 			if (this.IsFeatureAvailable(Feature.InterfaceStaticMembers) && !context.AllowMarshaling)
 			{
 				if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{IVTableInterface.Identifier.ValueText}"))
 				{
-					this.volatileCode.GenerateSpecialType("IVTable", () => this.volatileCode.AddSpecialType("IVTable", IVTableInterface));
+					this._volatileCode.GenerateSpecialType("IVTable", () => this._volatileCode.AddSpecialType("IVTable", IVTableInterface));
 				}
 
 				if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{IVTableGenericInterface.Identifier.ValueText}`2"))
 				{
-					this.volatileCode.GenerateSpecialType("IVTable`2", () => this.volatileCode.AddSpecialType("IVTable`2", IVTableGenericInterface));
+					this._volatileCode.GenerateSpecialType("IVTable`2", () => this._volatileCode.AddSpecialType("IVTable`2", IVTableGenericInterface));
 				}
 
 				if (!this.TryGenerate("IUnknown", out _, default))
@@ -847,12 +837,12 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal bool TryStripCommonNamespace(string fullNamespace, [NotNullWhen(true)] out string? strippedNamespace)
 	{
-		if (fullNamespace.StartsWith(this.MetadataIndex.CommonNamespaceWithDot, StringComparison.Ordinal))
+		if (fullNamespace.StartsWith(this.WinMDIndexer.CommonNamespaceWithDot, StringComparison.Ordinal))
 		{
-			strippedNamespace = fullNamespace.Substring(this.MetadataIndex.CommonNamespaceWithDot.Length);
+			strippedNamespace = fullNamespace.Substring(this.WinMDIndexer.CommonNamespaceWithDot.Length);
 			return true;
 		}
-		else if (fullNamespace == this.MetadataIndex.CommonNamespace)
+		else if (fullNamespace == this.WinMDIndexer.CommonNamespace)
 		{
 			strippedNamespace = string.Empty;
 			return true;
@@ -870,7 +860,7 @@ public partial class Generator : IGenerator, IDisposable
 			TypeDefinition td = this.Reader.GetTypeDefinition(tdh);
 			if (this.Reader.StringComparer.Equals(td.Name, name) && this.Reader.StringComparer.Equals(td.Namespace, @namespace))
 			{
-				this.volatileCode.GenerationTransaction(delegate
+				this._volatileCode.GenerationTransaction(delegate
 				{
 					this.RequestInteropType(tdh, context);
 				});
@@ -899,7 +889,7 @@ public partial class Generator : IGenerator, IDisposable
 			// may use a TypeReferenceHandle or TypeDefinitionHandle to just one of many arch-specific definitions of this type.
 			// Try to find the appropriate definition for our target architecture.
 			string name = this.Reader.GetString(typeDef.Name);
-			NamespaceMetadata namespaceMetadata = this.MetadataIndex.MetadataByNamespace[ns];
+			NamespaceMetadata namespaceMetadata = this.WinMDIndexer.MetadataByNamespace[ns];
 			if (!namespaceMetadata.Types.TryGetValue(name, out typeDefHandle) && namespaceMetadata.TypesForOtherPlatform.Contains(name))
 			{
 				throw new PlatformIncompatibleException($"Request for type ({ns}.{name}) that is not available given the target platform.");
@@ -907,7 +897,7 @@ public partial class Generator : IGenerator, IDisposable
 		}
 
 		bool hasUnmanagedName = this.HasUnmanagedSuffix(this.Reader, typeDef.Name, context.AllowMarshaling, this.IsManagedType(typeDefHandle));
-		this.volatileCode.GenerateType(typeDefHandle, hasUnmanagedName, delegate
+		this._volatileCode.GenerateType(typeDefHandle, hasUnmanagedName, delegate
 		{
 			if (this.RequestInteropTypeHelper(typeDefHandle, context) is MemberDeclarationSyntax typeDeclaration)
 			{
@@ -922,7 +912,7 @@ public partial class Generator : IGenerator, IDisposable
 						new SyntaxAnnotation(NamespaceContainerAnnotation, shortNamespace));
 				}
 
-				this.volatileCode.AddInteropType(typeDefHandle, hasUnmanagedName, typeDeclaration);
+				this._volatileCode.AddInteropType(typeDefHandle, hasUnmanagedName, typeDeclaration);
 			}
 		});
 	}
@@ -943,7 +933,7 @@ public partial class Generator : IGenerator, IDisposable
 					// We can't find the interop among our metadata inputs.
 					// Before we give up and report an error, search for the required type among the compilation's referenced assemblies.
 					string metadataName = $"{this.Reader.GetString(typeRef.Namespace)}.{this.Reader.GetString(typeRef.Name)}";
-					if (this.compilation?.GetTypeByMetadataName(metadataName) is null)
+					if (this._compilation?.GetTypeByMetadataName(metadataName) is null)
 					{
 						AssemblyReference assemblyRef = this.Reader.GetAssemblyReference((AssemblyReferenceHandle)typeRef.ResolutionScope);
 						string scope = this.Reader.GetString(assemblyRef.Name);
@@ -956,9 +946,9 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal void RequestMacro(MethodDeclarationSyntax macro)
 	{
-		this.volatileCode.GenerateMacro(macro.Identifier.ValueText, delegate
+		this._volatileCode.GenerateMacro(macro.Identifier.ValueText, delegate
 		{
-			this.volatileCode.AddMacro(macro.Identifier.ValueText, (MethodDeclarationSyntax)this.ElevateVisibility(macro));
+			this._volatileCode.AddMacro(macro.Identifier.ValueText, (MethodDeclarationSyntax)this.ElevateVisibility(macro));
 
 			// Generate any additional types that this macro relies on.
 			foreach (QualifiedNameSyntax identifier in macro.DescendantNodes().OfType<QualifiedNameSyntax>())
@@ -1024,7 +1014,7 @@ public partial class Generator : IGenerator, IDisposable
 		MemberDeclarationSyntax? specialDeclaration = null;
 		if (this.InputAssemblyName.Equals("Windows.Win32", StringComparison.OrdinalIgnoreCase))
 		{
-			this.volatileCode.GenerateSpecialType(specialName, delegate
+			this._volatileCode.GenerateSpecialType(specialName, delegate
 			{
 				switch (specialName)
 				{
@@ -1056,13 +1046,13 @@ public partial class Generator : IGenerator, IDisposable
 
 				specialDeclaration = specialDeclaration.WithAdditionalAnnotations(new SyntaxAnnotation(NamespaceContainerAnnotation, subNamespace));
 
-				this.volatileCode.AddSpecialType(specialName, specialDeclaration);
+				this._volatileCode.AddSpecialType(specialName, specialDeclaration);
 			});
 		}
 		else if (this.Manager?.TryGetGenerator("Windows.Win32", out Generator? win32Generator) is true)
 		{
 			string? fullyQualifiedNameLocal = null!;
-			win32Generator.volatileCode.GenerationTransaction(delegate
+			win32Generator._volatileCode.GenerationTransaction(delegate
 			{
 				specialDeclaration = win32Generator.RequestSpecialTypeDefStruct(specialName, out fullyQualifiedNameLocal);
 			});
@@ -1072,9 +1062,9 @@ public partial class Generator : IGenerator, IDisposable
 		return specialDeclaration;
 	}
 
-	internal bool HasUnmanagedSuffix(string originalName, bool allowMarshaling, bool isManagedType) => !allowMarshaling && isManagedType && this.options.AllowMarshaling && originalName is not "IUnknown";
+	internal bool HasUnmanagedSuffix(string originalName, bool allowMarshaling, bool isManagedType) => !allowMarshaling && isManagedType && this._options.AllowMarshaling && originalName is not "IUnknown";
 
-	internal bool HasUnmanagedSuffix(MetadataReader reader, StringHandle typeName, bool allowMarshaling, bool isManagedType) => !allowMarshaling && isManagedType && this.options.AllowMarshaling && !reader.StringComparer.Equals(typeName, "IUnknown");
+	internal bool HasUnmanagedSuffix(MetadataReader reader, StringHandle typeName, bool allowMarshaling, bool isManagedType) => !allowMarshaling && isManagedType && this._options.AllowMarshaling && !reader.StringComparer.Equals(typeName, "IUnknown");
 
 	internal string GetMangledIdentifier(string normalIdentifier, bool allowMarshaling, bool isManagedType) =>
 		this.HasUnmanagedSuffix(normalIdentifier, allowMarshaling, isManagedType) ? normalIdentifier + UnmanagedInteropSuffix : normalIdentifier;
@@ -1087,7 +1077,7 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		if (disposing)
 		{
-			this.metadataReader.Dispose();
+			this._winMDReaderRental.Dispose();
 		}
 	}
 
@@ -1154,15 +1144,15 @@ public partial class Generator : IGenerator, IDisposable
 
 	private IReadOnlyList<ISymbol> FindTypeSymbolsIfAlreadyAvailable(string fullyQualifiedMetadataName)
 	{
-		if (this.findTypeSymbolIfAlreadyAvailableCache.TryGetValue(fullyQualifiedMetadataName, out IReadOnlyList<ISymbol>? result))
+		if (this._findTypeSymbolIfAlreadyAvailableCache.TryGetValue(fullyQualifiedMetadataName, out IReadOnlyList<ISymbol>? result))
 		{
 			return result;
 		}
 
 		List<ISymbol>? results = null;
-		if (this.compilation is object)
+		if (this._compilation is object)
 		{
-			if (this.compilation.Assembly.GetTypeByMetadataName(fullyQualifiedMetadataName) is { } ownSymbol)
+			if (this._compilation.Assembly.GetTypeByMetadataName(fullyQualifiedMetadataName) is { } ownSymbol)
 			{
 				// This assembly defines it.
 				// But if it defines it as a partial, we should not consider it as fully defined so we populate our side.
@@ -1173,7 +1163,7 @@ public partial class Generator : IGenerator, IDisposable
 				}
 			}
 
-			foreach (MetadataReference? reference in this.compilation.References)
+			foreach (MetadataReference? reference in this._compilation.References)
 			{
 				if (!reference.Properties.Aliases.IsEmpty)
 				{
@@ -1181,11 +1171,11 @@ public partial class Generator : IGenerator, IDisposable
 					continue;
 				}
 
-				if (this.compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol referencedAssembly)
+				if (this._compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol referencedAssembly)
 				{
 					if (referencedAssembly.GetTypeByMetadataName(fullyQualifiedMetadataName) is { } externalSymbol)
 					{
-						if (this.compilation.IsSymbolAccessibleWithin(externalSymbol, this.compilation.Assembly))
+						if (this._compilation.IsSymbolAccessibleWithin(externalSymbol, this._compilation.Assembly))
 						{
 							// A referenced assembly declares this symbol and it is accessible to our own.
 							results ??= new();
@@ -1197,7 +1187,7 @@ public partial class Generator : IGenerator, IDisposable
 		}
 
 		result = (IReadOnlyList<ISymbol>?)results ?? Array.Empty<ISymbol>();
-		this.findTypeSymbolIfAlreadyAvailableCache.Add(fullyQualifiedMetadataName, result);
+		this._findTypeSymbolIfAlreadyAvailableCache.Add(fullyQualifiedMetadataName, result);
 		return result;
 	}
 
@@ -1292,7 +1282,7 @@ public partial class Generator : IGenerator, IDisposable
 			{
 				typeDeclaration =
 					this.IsUntypedDelegate(typeDef) ? this.DeclareUntypedDelegate(typeDef) :
-					this.options.AllowMarshaling ? this.DeclareDelegate(typeDef) :
+					this._options.AllowMarshaling ? this.DeclareDelegate(typeDef) :
 					null;
 			}
 			else
@@ -1318,7 +1308,7 @@ public partial class Generator : IGenerator, IDisposable
 		}
 	}
 
-	private bool IsCompatibleWithPlatform(CustomAttributeHandleCollection customAttributesOnMember) => WinMDFileHelper.IsCompatibleWithPlatform(this.Reader, this.MetadataIndex, this.compilation?.Options.Platform, customAttributesOnMember);
+	private bool IsCompatibleWithPlatform(CustomAttributeHandleCollection customAttributesOnMember) => WinMDFileHelper.IsCompatibleWithPlatform(this.Reader, this.WinMDIndexer, this._compilation?.Options.Platform, customAttributesOnMember);
 
 	private void TryGenerateTypeOrThrow(string possiblyQualifiedName)
 	{
@@ -1444,7 +1434,7 @@ public partial class Generator : IGenerator, IDisposable
 
 	private void DeclareSliceAtNullExtensionMethodIfNecessary()
 	{
-		if (this.sliceAtNullMethodDecl is null)
+		if (this._sliceAtNullMethodDecl is null)
 		{
 			IdentifierNameSyntax valueParam = IdentifierName("value");
 			IdentifierNameSyntax lengthLocal = IdentifierName("length");
@@ -1459,7 +1449,7 @@ public partial class Generator : IGenerator, IDisposable
 							ArgumentList().AddArguments(Argument(LiteralExpression(SyntaxKind.CharacterLiteralExpression, Literal('\0')))))))));
 
 			// static ReadOnlySpan<char> SliceAtNull(this ReadOnlySpan<char> value)
-			this.sliceAtNullMethodDecl = MethodDeclaration(charSpan, SliceAtNullMethodName.Identifier)
+			this._sliceAtNullMethodDecl = MethodDeclaration(charSpan, SliceAtNullMethodName.Identifier)
 				.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.StaticKeyword))
 				.AddParameterListParameters(Parameter(valueParam.Identifier).WithType(charSpan).AddModifiers(TokenWithSpace(SyntaxKind.ThisKeyword)))
 				.WithBody(Block().AddStatements(
@@ -1473,20 +1463,20 @@ public partial class Generator : IGenerator, IDisposable
 							ArgumentList().AddArguments(Argument(LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(0))), Argument(lengthLocal)))))));
 		}
 
-		this.volatileCode.AddInlineArrayIndexerExtension(this.sliceAtNullMethodDecl);
+		this._volatileCode.AddInlineArrayIndexerExtension(this._sliceAtNullMethodDecl);
 	}
 
 	private IEnumerable<NamespaceMetadata> GetNamespacesToSearch(string? @namespace)
 	{
 		if (@namespace is object)
 		{
-			return this.MetadataIndex.MetadataByNamespace.TryGetValue(@namespace, out NamespaceMetadata? metadata)
+			return this.WinMDIndexer.MetadataByNamespace.TryGetValue(@namespace, out NamespaceMetadata? metadata)
 				? new[] { metadata }
 				: Array.Empty<NamespaceMetadata>();
 		}
 		else
 		{
-			return this.MetadataIndex.MetadataByNamespace.Values;
+			return this.WinMDIndexer.MetadataByNamespace.Values;
 		}
 	}
 

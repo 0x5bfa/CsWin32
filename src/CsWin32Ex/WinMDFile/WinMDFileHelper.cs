@@ -73,7 +73,7 @@ internal static class WinMDFileHelper
 		return reader.StringComparer.Equals(actualName, name) && reader.StringComparer.Equals(actualNamespace, ns);
 	}
 
-	internal static CustomAttribute? FindAttribute(MetadataReader reader, CustomAttributeHandleCollection? customAttributeHandles, string attributeNamespace, string attributeName)
+	internal static CustomAttribute? TryGetAttributeOn(MetadataReader reader, CustomAttributeHandleCollection? customAttributeHandles, string attributeNamespace, string attributeName)
 	{
 		if (customAttributeHandles is not null)
 		{

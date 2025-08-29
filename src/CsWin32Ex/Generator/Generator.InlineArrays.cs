@@ -71,7 +71,7 @@ public partial class Generator
 		IdentifierNameSyntax fixedLengthStructName = IdentifierName(fixedLengthStructNameString);
 		TypeSyntax qualifiedFixedLengthStructName = ParseTypeName($"{structNamespace}.{fixedLengthStructNameString}");
 
-		if (structNamespace is not null && this.volatileCode.IsInlineArrayStructGenerated(structNamespace, fixedLengthStructNameString))
+		if (structNamespace is not null && this._volatileCode.IsInlineArrayStructGenerated(structNamespace, fixedLengthStructNameString))
 		{
 			return (qualifiedFixedLengthStructName, default, default);
 		}
@@ -183,7 +183,7 @@ public partial class Generator
 
 		// Pointers cannot be used as type arguments, so if the element type is unsafe (a pointer), we have to skip the Span<T> methods.
 		// We could overcome this by defining a PElementType struct that contains the pointer, then use the PElementType as the type argument.
-		if (this.canCallCreateSpan && !RequiresUnsafe(elementType))
+		if (this._canCallCreateSpan && !RequiresUnsafe(elementType))
 		{
 			// Value[0]
 			ExpressionSyntax value0 = valueFieldName is not null
@@ -232,7 +232,7 @@ public partial class Generator
 #pragma warning disable SA1515 // Single-line comment should be preceded by blank line
 #pragma warning disable SA1114 // Parameter list should follow declaration
 
-		bool generateSpanLegacyHelpers = this.canUseSpan && (!this.canCallCreateSpan || this.Options.MultiTargetingFriendlyAPIs);
+		bool generateSpanLegacyHelpers = this._canUseSpan && (!this._canCallCreateSpan || this.Options.MultiTargetingFriendlyAPIs);
 		if (generateSpanLegacyHelpers && !RequiresUnsafe(elementType))
 		{
 			// internal readonly void CopyTo(Span<TheStruct> target, int length = Length)
@@ -321,7 +321,7 @@ public partial class Generator
 			fixedLengthStruct = fixedLengthStruct.AddMembers(toArrayMethod);
 		}
 
-		if (this.canUseSpan && elementTypeIsEquatable)
+		if (this._canUseSpan && elementTypeIsEquatable)
 		{
 			// internal readonly bool Equals(ReadOnlySpan<TheStruct> value)
 			IdentifierNameSyntax valueParameterName = IdentifierName("value");
@@ -387,7 +387,7 @@ public partial class Generator
 
 		if (elementType is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.CharKeyword })
 		{
-			if (this.canUseSpan)
+			if (this._canUseSpan)
 			{
 				// internal readonly bool Equals(string value) => Equals(value.AsSpan());
 				fixedLengthStruct = fixedLengthStruct.AddMembers(
@@ -432,7 +432,7 @@ public partial class Generator
 					.WithExpressionBody(ArrowExpressionClause(SliceAtLengthToString(InvocationExpression(asReadOnlyMethodName, ArgumentList()))))
 					.WithSemicolonToken(Semicolon);
 			}
-			else if (this.canUseSpan)
+			else if (this._canUseSpan)
 			{
 				// fixed (char* p0 = Value) return new ReadOnlySpan<char>(p0, Length).Slice(0, length).ToString();
 				IdentifierNameSyntax p0Local = IdentifierName("p0");
@@ -500,7 +500,7 @@ public partial class Generator
 					.WithExpressionBody(ArrowExpressionClause(SliceAtNullToString(InvocationExpression(asReadOnlyMethodName, ArgumentList()))))
 					.WithSemicolonToken(Semicolon);
 			}
-			else if (this.canUseSpan)
+			else if (this._canUseSpan)
 			{
 				// fixed (char* p0 = Value) return new ReadOnlySpan<char>(p0, Length).SliceAtNull().ToString();
 				IdentifierNameSyntax p0Local = IdentifierName("p0");
@@ -571,7 +571,7 @@ public partial class Generator
 
 			fixedLengthStruct = fixedLengthStruct.AddMembers(toStringOverride);
 
-			if (this.canUseSpan)
+			if (this._canUseSpan)
 			{
 				// public static implicit operator __char_64(string? value) => value.AsSpan();
 				fixedLengthStruct = fixedLengthStruct.AddMembers(
@@ -588,7 +588,7 @@ public partial class Generator
 		}
 
 		// public static implicit operator __TheStruct_64(ReadOnlySpan<TheStruct> value)
-		if (this.canUseSpan && !RequiresUnsafe(elementType))
+		if (this._canUseSpan && !RequiresUnsafe(elementType))
 		{
 			IdentifierNameSyntax valueParam = IdentifierName("value");
 			ConversionOperatorDeclarationSyntax implicitSpanToStruct =
@@ -604,7 +604,7 @@ public partial class Generator
 				? MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, resultLocal, valueFieldName) // result.Value
 				: PrefixUnaryExpression(SyntaxKind.AddressOfExpression, MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, resultLocal, firstElementName!)); // &result._0
 
-			if (this.canUseUnsafeSkipInit)
+			if (this._canUseUnsafeSkipInit)
 			{
 				// Unsafe.SkipInit(out __char_1 result);
 				implicitSpanToStruct = implicitSpanToStruct.AddBodyStatements(
@@ -632,14 +632,14 @@ public partial class Generator
 						IdentifierName(nameof(Span<int>.Clear))),
 					ArgumentList()));
 
-			if (this.canUseSpan)
+			if (this._canUseSpan)
 			{
 				//// int initLength = value.Length;
 				LocalDeclarationStatementSyntax declareInitLength =
 					LocalDeclarationStatement(VariableDeclaration(PredefinedType(TokenWithSpace(SyntaxKind.IntKeyword))).AddVariables(
 						VariableDeclarator(initLengthLocal.Identifier).WithInitializer(EqualsValueClause(MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, valueParam, IdentifierName(nameof(ReadOnlySpan<int>.Length)))))));
 
-				if (this.canCallCreateSpan)
+				if (this._canCallCreateSpan)
 				{
 					// value.CopyTo(result.AsSpan());
 					StatementSyntax valueCopyToResult =
@@ -730,7 +730,7 @@ public partial class Generator
 			}
 			else
 			{
-				qualifiedElementType = fieldTypeHandleInfo.ToTypeSyntax(this.extensionMethodSignatureTypeSettings, GeneratingElement.Other, customAttributes).Type switch
+				qualifiedElementType = fieldTypeHandleInfo.ToTypeSyntax(this._extensionMethodSignatureTypeSettings, GeneratingElement.Other, customAttributes).Type switch
 				{
 					ArrayTypeSyntax at => at.ElementType,
 					PointerTypeSyntax ptrType => ptrType.ElementType,
@@ -738,7 +738,7 @@ public partial class Generator
 				};
 			}
 
-			TypeSyntaxSettings extensionMethodSignatureTypeSettings = context.Filter(this.extensionMethodSignatureTypeSettings);
+			TypeSyntaxSettings extensionMethodSignatureTypeSettings = context.Filter(this._extensionMethodSignatureTypeSettings);
 
 			// internal static unsafe ref readonly TheStruct ReadOnlyItemRef(this in MainAVIHeader.__dwReserved_4 @this, int index) => ref @this.Value[index]
 			ParameterSyntax thisParameter = Parameter(atThis.Identifier)
@@ -751,7 +751,7 @@ public partial class Generator
 				.WithExpressionBody(ArrowExpressionClause(RefExpression(ElementAccessExpression(MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, atThis, valueFieldName)).AddArgumentListArguments(Argument(indexParamName)))))
 				.WithSemicolonToken(Semicolon);
 
-			this.volatileCode.AddInlineArrayIndexerExtension(getAtMethod);
+			this._volatileCode.AddInlineArrayIndexerExtension(getAtMethod);
 		}
 
 		if (structNamespace is not null)
@@ -772,7 +772,7 @@ public partial class Generator
 			fixedLengthStructInNamespace = fixedLengthStructInNamespace
 					.WithAdditionalAnnotations(new SyntaxAnnotation(SimpleFileNameAnnotation, $"{fileNamePrefix}.InlineArrays"));
 
-			this.volatileCode.AddInlineArrayStruct(structNamespace, fixedLengthStructNameString, fixedLengthStructInNamespace);
+			this._volatileCode.AddInlineArrayStruct(structNamespace, fixedLengthStructNameString, fixedLengthStructInNamespace);
 
 			return (qualifiedFixedLengthStructName, default, null);
 		}
@@ -786,7 +786,7 @@ public partial class Generator
 	private ClassDeclarationSyntax DeclareInlineArrayIndexerExtensionsClass()
 	{
 		var filteredExtensionMethods =
-			this.committedCode.InlineArrayIndexerExtensions.Where(e =>
+			this._committedCode.InlineArrayIndexerExtensions.Where(e =>
 				this.FindExtensionMethodIfAlreadyAvailable($"{this.Namespace}.{InlineArrayIndexerExtensionsClassName}", e.Identifier.ValueText) is null).ToArray();
 
 		return ClassDeclaration(InlineArrayIndexerExtensionsClassName.Identifier)

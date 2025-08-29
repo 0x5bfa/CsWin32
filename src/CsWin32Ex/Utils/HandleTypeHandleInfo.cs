@@ -130,8 +130,8 @@ internal record HandleTypeHandleInfo : TypeHandleInfo
 
 		if (simpleName is "PWSTR" or "PSTR")
 		{
-			bool isConst = this.IsConstantField || WinMDFileHelper.FindAttribute(this.reader, customAttributes, Generator.InteropDecorationNamespace, "ConstAttribute").HasValue;
-			bool isEmptyStringTerminatedList = WinMDFileHelper.FindAttribute(this.reader, customAttributes, Generator.InteropDecorationNamespace, "NullNullTerminatedAttribute").HasValue;
+			bool isConst = this.IsConstantField || WinMDFileHelper.TryGetAttributeOn(this.reader, customAttributes, Generator.InteropDecorationNamespace, "ConstAttribute").HasValue;
+			bool isEmptyStringTerminatedList = WinMDFileHelper.TryGetAttributeOn(this.reader, customAttributes, Generator.InteropDecorationNamespace, "NullNullTerminatedAttribute").HasValue;
 			string constChar = isConst ? "C" : string.Empty;
 			string listChars = isEmptyStringTerminatedList ? "ZZ" : string.Empty;
 			string nameEnding = simpleName.Substring(1);

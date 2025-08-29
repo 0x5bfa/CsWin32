@@ -25,10 +25,10 @@ public partial class Generator
 			return false;
 		}
 
-		member = ParseMemberDeclaration(template, generator?.parseOptions) ?? throw new GenerationFailedException($"Unable to parse a type from a template: {name}");
+		member = ParseMemberDeclaration(template, generator?._parseOptions) ?? throw new GenerationFailedException($"Unable to parse a type from a template: {name}");
 
 		// Strip out #if/#else/#endif trivia, which was already evaluated with the parse options we passed in.
-		if (generator?.parseOptions is not null)
+		if (generator?._parseOptions is not null)
 		{
 			member = (MemberDeclarationSyntax)member.Accept(DirectiveTriviaRemover.Instance)!;
 		}
@@ -47,10 +47,10 @@ public partial class Generator
 			return false;
 		}
 
-		compilationUnit = SyntaxFactory.ParseCompilationUnit(template, options: generator?.parseOptions) ?? throw new GenerationFailedException($"Unable to parse compilation unit from a template: {name}");
+		compilationUnit = SyntaxFactory.ParseCompilationUnit(template, options: generator?._parseOptions) ?? throw new GenerationFailedException($"Unable to parse compilation unit from a template: {name}");
 
 		// Strip out #if/#else/#endif trivia, which was already evaluated with the parse options we passed in.
-		if (generator?.parseOptions is not null)
+		if (generator?._parseOptions is not null)
 		{
 			compilationUnit = (CompilationUnitSyntax)compilationUnit.Accept(DirectiveTriviaRemover.Instance)!;
 		}

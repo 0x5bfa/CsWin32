@@ -36,7 +36,7 @@ public class SourceGenerator : ISourceGenerator
 		if (context.Compilation is not CSharpCompilation compilation ||
 			GetNativeMethodsJsonOptions(context) is not { } options ||
 			GetNativeMethodsTxtFiles(context) is not { } nativeMethodsTxtFiles ||
-			!nativeMethodsTxtFiles.Any())
+			!options.Validate() || !nativeMethodsTxtFiles.Any())
 			return;
 
 		// Produce some diagnostics before actually starting to generate

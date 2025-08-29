@@ -15,7 +15,7 @@ public partial class Generator
 
 	private IEnumerable<MethodDeclarationSyntax> DeclareFriendlyOverloads(MethodDefinition methodDefinition, MethodDeclarationSyntax externMethodDeclaration, NameSyntax declaringTypeName, FriendlyOverloadOf overloadOf, HashSet<string> helperMethodsAdded)
 	{
-		if (!this.options.FriendlyOverloads.Enabled)
+		if (!this._options.FriendlyOverloads.Enabled)
 		{
 			yield break;
 		}
@@ -31,14 +31,14 @@ public partial class Generator
 			yield return (MethodDeclarationSyntax)templateFriendlyOverload;
 		}
 
-		if (externMethodDeclaration.Identifier.ValueText != "CoCreateInstance" || !this.options.ComInterop.UseIntPtrForComOutPointers)
+		if (externMethodDeclaration.Identifier.ValueText != "CoCreateInstance" || !this._options.ComInterop.UseIntPtrForComOutPointers)
 		{
-			if (this.options.AllowMarshaling && this.TryFetchTemplate("marshaling/" + externMethodDeclaration.Identifier.ValueText, out templateFriendlyOverload))
+			if (this._options.AllowMarshaling && this.TryFetchTemplate("marshaling/" + externMethodDeclaration.Identifier.ValueText, out templateFriendlyOverload))
 			{
 				yield return (MethodDeclarationSyntax)templateFriendlyOverload;
 			}
 
-			if (!this.options.AllowMarshaling && this.TryFetchTemplate("no_marshaling/" + externMethodDeclaration.Identifier.ValueText, out templateFriendlyOverload))
+			if (!this._options.AllowMarshaling && this.TryFetchTemplate("no_marshaling/" + externMethodDeclaration.Identifier.ValueText, out templateFriendlyOverload))
 			{
 				yield return (MethodDeclarationSyntax)templateFriendlyOverload;
 			}
@@ -47,14 +47,14 @@ public partial class Generator
 #pragma warning disable SA1114 // Parameter list should follow declaration
 		static ParameterSyntax StripAttributes(ParameterSyntax parameter) => parameter.WithAttributeLists(List<AttributeListSyntax>());
 		static ExpressionSyntax GetSpanLength(ExpressionSyntax span, bool isRefType) => isRefType ? ParenthesizedExpression(BinaryExpression(SyntaxKind.CoalesceExpression, ConditionalAccessExpression(span, IdentifierName(nameof(Span<int>.Length))), LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(0)))) : MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, span, IdentifierName(nameof(Span<int>.Length)));
-		bool isReleaseMethod = this.MetadataIndex.ReleaseMethods.Contains(externMethodDeclaration.Identifier.ValueText);
+		bool isReleaseMethod = this.WinMDIndexer.ReleaseMethods.Contains(externMethodDeclaration.Identifier.ValueText);
 		bool doNotRelease = this.FindInteropDecorativeAttribute(this.GetReturnTypeCustomAttributes(methodDefinition), DoNotReleaseAttribute) is not null;
 
 		TypeSyntaxSettings parameterTypeSyntaxSettings = overloadOf switch
 		{
-			FriendlyOverloadOf.ExternMethod => this.externSignatureTypeSettings,
-			FriendlyOverloadOf.StructMethod => this.extensionMethodSignatureTypeSettings,
-			FriendlyOverloadOf.InterfaceMethod => this.extensionMethodSignatureTypeSettings,
+			FriendlyOverloadOf.ExternMethod => this._externSignatureTypeSettings,
+			FriendlyOverloadOf.StructMethod => this._extensionMethodSignatureTypeSettings,
+			FriendlyOverloadOf.InterfaceMethod => this._extensionMethodSignatureTypeSettings,
 			_ => throw new NotSupportedException(overloadOf.ToString()),
 		};
 
@@ -174,7 +174,7 @@ public partial class Generator
 							Argument(LiteralExpression(doNotRelease ? SyntaxKind.FalseLiteralExpression : SyntaxKind.TrueLiteralExpression)).WithNameColon(NameColon(IdentifierName("ownsHandle")))))));
 				}
 			}
-			else if (this.options.UseSafeHandles && isIn && !isOut && !isReleaseMethod && parameterTypeInfo is HandleTypeHandleInfo parameterHandleTypeInfo && this.TryGetHandleReleaseMethod(parameterHandleTypeInfo.Handle, paramAttributes, out string? releaseMethod) && !this.Reader.StringComparer.Equals(methodDefinition.Name, releaseMethod)
+			else if (this._options.UseSafeHandles && isIn && !isOut && !isReleaseMethod && parameterTypeInfo is HandleTypeHandleInfo parameterHandleTypeInfo && this.TryGetHandleReleaseMethod(parameterHandleTypeInfo.Handle, paramAttributes, out string? releaseMethod) && !this.Reader.StringComparer.Equals(methodDefinition.Name, releaseMethod)
 				&& !(this.TryGetTypeDefFieldType(parameterHandleTypeInfo, out TypeHandleInfo? fieldType) && !this.IsSafeHandleCompatibleTypeDefFieldType(fieldType)))
 			{
 				IdentifierNameSyntax typeDefHandleName = IdentifierName(externParam.Identifier.ValueText + "Local");
@@ -273,7 +273,7 @@ public partial class Generator
 					{
 						// This block intentionally left blank.
 					}
-					else if (countConst.HasValue && !isPointerToPointer && this.canUseSpan && externParam.Type is PointerTypeSyntax)
+					else if (countConst.HasValue && !isPointerToPointer && this._canUseSpan && externParam.Type is PointerTypeSyntax)
 					{
 						// TODO: add support for lists of pointers via a generated pointer-wrapping struct
 						signatureChanged = true;
@@ -519,7 +519,7 @@ public partial class Generator
 				// new PCSTR(someLocal)
 				arguments[param.SequenceNumber - 1] = Argument(ObjectCreationExpression(externParam.Type).AddArgumentListArguments(Argument(localName)));
 			}
-			else if (isIn && isOut && this.canUseSpan && externParam.Type is QualifiedNameSyntax { Right: { Identifier: { ValueText: "PWSTR" } } })
+			else if (isIn && isOut && this._canUseSpan && externParam.Type is QualifiedNameSyntax { Right: { Identifier: { ValueText: "PWSTR" } } })
 			{
 				IdentifierNameSyntax localName = IdentifierName("p" + origName);
 				IdentifierNameSyntax localWstrName = IdentifierName("wstr" + origName);
@@ -562,7 +562,7 @@ public partial class Generator
 							Argument(LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(0))),
 							Argument(MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, localWstrName, IdentifierName("Length"))))))));
 			}
-			else if (!isIn && isOut && this.canUseSpan && externParam.Type is QualifiedNameSyntax { Right: { Identifier: { ValueText: "PWSTR" } } })
+			else if (!isIn && isOut && this._canUseSpan && externParam.Type is QualifiedNameSyntax { Right: { Identifier: { ValueText: "PWSTR" } } })
 			{
 				IdentifierNameSyntax localName = IdentifierName(origName + "Local");
 				signatureChanged = true;
@@ -580,7 +580,7 @@ public partial class Generator
 				// Remove the size parameter if one exists.
 				TryHandleCountParam(PredefinedType(Token(SyntaxKind.CharKeyword)), nullableSource: false);
 			}
-			else if (isIn && isOptional && !isOut && isManagedParameterType && parameterTypeInfo is PointerTypeHandleInfo ptrInfo && ptrInfo.ElementType.IsValueType(parameterTypeSyntaxSettings) is true && this.canUseUnsafeAsRef)
+			else if (isIn && isOptional && !isOut && isManagedParameterType && parameterTypeInfo is PointerTypeHandleInfo ptrInfo && ptrInfo.ElementType.IsValueType(parameterTypeSyntaxSettings) is true && this._canUseUnsafeAsRef)
 			{
 				// The extern method couldn't have exposed the parameter as a pointer because the type is managed.
 				// It would have exposed as an `in` modifier, and non-optional. But we can expose as optional anyway.
@@ -597,7 +597,7 @@ public partial class Generator
 
 				// We can't pass in null, but we can be fancy to achieve the same effect.
 				// Unsafe.NullRef<TParamType>() or Unsafe.AsRef<TParamType>(null), depending on what's available.
-				ExpressionSyntax nullRef = this.canUseUnsafeNullRef
+				ExpressionSyntax nullRef = this._canUseUnsafeNullRef
 					? InvocationExpression(
 						MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName(nameof(Unsafe)), GenericName("NullRef", TypeArgumentList().AddArguments(externParam.Type))),
 						ArgumentList())
@@ -617,7 +617,7 @@ public partial class Generator
 				// It is possible that countParamIndex points to a parameter that is not on the extern method
 				// when the parameter is the last one and was moved to a return value.
 				if (countParamIndex.HasValue
-					&& this.canUseSpan
+					&& this._canUseSpan
 					&& externMethodDeclaration.ParameterList.Parameters.Count > countParamIndex.Value
 					&& !(externMethodDeclaration.ParameterList.Parameters[countParamIndex.Value].Type is PointerTypeSyntax)
 					&& !(externMethodDeclaration.ParameterList.Parameters[countParamIndex.Value].Modifiers.Any(SyntaxKind.OutKeyword) || externMethodDeclaration.ParameterList.Parameters[countParamIndex.Value].Modifiers.Any(SyntaxKind.RefKeyword)))

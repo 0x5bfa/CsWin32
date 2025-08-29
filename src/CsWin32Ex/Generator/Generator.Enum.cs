@@ -5,7 +5,7 @@ namespace CsWin32Ex;
 public partial class Generator
 {
 	/// <inheritdoc/>
-	public bool TryGetEnumName(string enumValueName, [NotNullWhen(true)] out string? declaringEnum) => this.MetadataIndex.TryGetEnumName(this.Reader, enumValueName, out declaringEnum);
+	public bool TryGetEnumName(string enumValueName, [NotNullWhen(true)] out string? declaringEnum) => this.WinMDIndexer.TryGetEnumName(this.Reader, enumValueName, out declaringEnum);
 
 	private EnumDeclarationSyntax DeclareEnum(TypeDefinition typeDef)
 	{
@@ -64,7 +64,7 @@ public partial class Generator
 			ConstantHandle valueHandle = fieldDef.GetDefaultValue();
 			if (valueHandle.IsNil)
 			{
-				enumBaseType = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null).ToTypeSyntax(this.enumTypeSettings, GeneratingElement.EnumValue, null).Type;
+				enumBaseType = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null).ToTypeSyntax(this._enumTypeSettings, GeneratingElement.EnumValue, null).Type;
 				return;
 			}
 
@@ -78,7 +78,7 @@ public partial class Generator
 
 		bool TryFindConstant(string name, out FieldDefinitionHandle fieldDefinitionHandle)
 		{
-			foreach (var ns in this.MetadataIndex.MetadataByNamespace)
+			foreach (var ns in this.WinMDIndexer.MetadataByNamespace)
 			{
 				if (ns.Value.Fields.TryGetValue(name, out fieldDefinitionHandle))
 				{

@@ -90,7 +90,7 @@ public partial class Generator
 			this.TryGenerateExternMethod(freeMethodName, out _);
 		}
 
-		TypeSyntaxSettings typeSettings = isHandle ? this.fieldOfHandleTypeDefTypeSettings : this.fieldTypeSettings;
+		TypeSyntaxSettings typeSettings = isHandle ? this._fieldOfHandleTypeDefTypeSettings : this._fieldTypeSettings;
 
 		FieldDefinition fieldDef = this.Reader.GetFieldDefinition(typeDef.GetFields().Single());
 		string fieldName = this.Reader.GetString(fieldDef.Name);

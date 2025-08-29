@@ -2,9 +2,17 @@ name: CsWin32Ex CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+    paths-ignore:
+      - '.github/assets/**'
+      - 'docs/**'
+      - '*.md'
   pull_request:
-    branches: [ main ]
+    paths-ignore:
+      - '.github/assets/**'
+      - 'docs/**'
+      - '*.md'
 
 permissions:
   actions: read

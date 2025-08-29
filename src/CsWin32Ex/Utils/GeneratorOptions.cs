@@ -61,10 +61,12 @@ public record GeneratorOptions
 	/// Throws an exception when this instance is not initialized with a valid set of values.
 	/// </summary>
 	/// <exception cref="InvalidOperationException">Thrown when some setting is invalid.</exception>
-	public void Validate()
+	public bool Validate()
 	{
 		if (string.IsNullOrWhiteSpace(ClassName))
 			throw new InvalidOperationException("The ClassName property must not be null or empty.");
+
+		return true;
 	}
 
 	/// <summary>

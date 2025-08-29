@@ -6,14 +6,14 @@ public partial class Generator
 {
 	internal TypeSyntax? RequestSafeHandle(string releaseMethod)
 	{
-		if (!this.options.UseSafeHandles)
+		if (!this._options.UseSafeHandles)
 		{
 			return null;
 		}
 
 		try
 		{
-			if (this.volatileCode.TryGetSafeHandleForReleaseMethod(releaseMethod, out TypeSyntax? safeHandleType))
+			if (this._volatileCode.TryGetSafeHandleForReleaseMethod(releaseMethod, out TypeSyntax? safeHandleType))
 			{
 				return safeHandleType;
 			}
@@ -39,7 +39,7 @@ public partial class Generator
 
 			MethodSignature<TypeHandleInfo> releaseMethodSignature = releaseMethodDef.DecodeSignature(SignatureHandleProvider.Instance, null);
 			TypeHandleInfo releaseMethodParameterTypeHandleInfo = releaseMethodSignature.ParameterTypes[0];
-			TypeSyntaxAndMarshaling releaseMethodParameterType = releaseMethodParameterTypeHandleInfo.ToTypeSyntax(this.externSignatureTypeSettings, GeneratingElement.HelperClassMember, default);
+			TypeSyntaxAndMarshaling releaseMethodParameterType = releaseMethodParameterTypeHandleInfo.ToTypeSyntax(this._externSignatureTypeSettings, GeneratingElement.HelperClassMember, default);
 
 			// If the release method takes more than one parameter, we can't generate a SafeHandle for it.
 			if (releaseMethodSignature.RequiredParameterCount != 1)
@@ -59,7 +59,7 @@ public partial class Generator
 				safeHandleType = null;
 			}
 
-			this.volatileCode.AddSafeHandleNameForReleaseMethod(releaseMethod, safeHandleType);
+			this._volatileCode.AddSafeHandleNameForReleaseMethod(releaseMethod, safeHandleType);
 
 			if (safeHandleType is null)
 			{
@@ -79,7 +79,7 @@ public partial class Generator
 			IntPtr preferredInvalidValue = GetPreferredInvalidHandleValue(invalidHandleValues, new IntPtr(-1));
 
 			CustomAttributeHandleCollection? atts = this.GetReturnTypeCustomAttributes(releaseMethodDef);
-			TypeSyntaxAndMarshaling releaseMethodReturnType = releaseMethodSignature.ReturnType.ToTypeSyntax(this.externSignatureTypeSettings, GeneratingElement.HelperClassMember, atts);
+			TypeSyntaxAndMarshaling releaseMethodReturnType = releaseMethodSignature.ReturnType.ToTypeSyntax(this._externSignatureTypeSettings, GeneratingElement.HelperClassMember, atts);
 
 			this.TryGetRenamedMethod(releaseMethod, out string? renamedReleaseMethod);
 
@@ -133,7 +133,7 @@ public partial class Generator
 			bool implicitConversion = typeDefStructFieldType is PrimitiveTypeHandleInfo { PrimitiveTypeCode: PrimitiveTypeCode.IntPtr } or PointerTypeHandleInfo;
 			ArgumentSyntax releaseHandleArgument = Argument(CastExpression(
 				releaseMethodParameterType.Type,
-				implicitConversion ? thisHandle : CheckedExpression(CastExpression(typeDefStructFieldType!.ToTypeSyntax(this.fieldTypeSettings, GeneratingElement.HelperClassMember, null).Type, CastExpression(IdentifierName("nint"), thisHandle)))));
+				implicitConversion ? thisHandle : CheckedExpression(CastExpression(typeDefStructFieldType!.ToTypeSyntax(this._fieldTypeSettings, GeneratingElement.HelperClassMember, null).Type, CastExpression(IdentifierName("nint"), thisHandle)))));
 
 			// protected override bool ReleaseHandle() => ReleaseMethod((struct)this.handle);
 			// Special case release functions based on their return type as follows: (https://github.com/microsoft/win32metadata/issues/25)
@@ -144,7 +144,7 @@ public partial class Generator
 			ExpressionSyntax releaseInvocation = InvocationExpression(
 				MemberAccessExpression(
 					SyntaxKind.SimpleMemberAccessExpression,
-					IdentifierName(this.options.ClassName),
+					IdentifierName(this._options.ClassName),
 					IdentifierName(renamedReleaseMethod ?? releaseMethod)),
 				ArgumentList().AddArguments(releaseHandleArgument));
 			BlockSyntax? releaseBlock = null;
@@ -252,11 +252,11 @@ public partial class Generator
 				.AddAttributeLists(AttributeList().AddAttributes(GeneratedCodeAttribute))
 				.WithLeadingTrivia(ParseLeadingTrivia($@"
 /// <summary>
-/// Represents a Win32 handle that can be closed with <see cref=""{this.options.ClassName}.{renamedReleaseMethod ?? releaseMethod}({releaseMethodParameterType.Type})""/>.
+/// Represents a Win32 handle that can be closed with <see cref=""{this._options.ClassName}.{renamedReleaseMethod ?? releaseMethod}({releaseMethodParameterType.Type})""/>.
 /// </summary>
 "));
 
-			this.volatileCode.AddSafeHandleType(safeHandleDeclaration);
+			this._volatileCode.AddSafeHandleType(safeHandleDeclaration);
 			return safeHandleType;
 		}
 		catch (Exception ex)
@@ -302,7 +302,7 @@ public partial class Generator
 			}
 		}
 
-		return this.MetadataIndex.HandleTypeReleaseMethod.TryGetValue(handleStructDefHandle, out releaseMethod);
+		return this.WinMDIndexer.HandleTypeReleaseMethod.TryGetValue(handleStructDefHandle, out releaseMethod);
 	}
 
 	private static IntPtr GetPreferredInvalidHandleValue(HashSet<IntPtr> invalidHandleValues, IntPtr preferredValue = default) => invalidHandleValues.Contains(preferredValue) ? preferredValue : invalidHandleValues.FirstOrDefault();
@@ -324,7 +324,7 @@ public partial class Generator
 	private bool IsHandle(TypeDefinitionHandle typeDefHandle, out string? releaseMethodName)
 	{
 		// Structs with RAIIFree attributes are handles.
-		if (this.MetadataIndex.HandleTypeReleaseMethod.TryGetValue(typeDefHandle, out releaseMethodName))
+		if (this.WinMDIndexer.HandleTypeReleaseMethod.TryGetValue(typeDefHandle, out releaseMethodName))
 		{
 			return true;
 		}

@@ -8,7 +8,7 @@ Additionally, all `Guid` properties now use RVA-backed fields, allowing you to t
 
 The codebase has been greatly simplified: unnecessary files have been removed, and a single GitHub Actions workflow has been set up to ensure code sustainability and testability.
 
-```console
+```bash
 > dotnet add package CsWin32Ex --version 1.0.0
 ```
 
@@ -16,7 +16,33 @@ The codebase has been greatly simplified: unnecessary files have been removed, a
 
 When authoring a WinMD file for use with CsWin32 (or CsWin32Ex), ensure that you follow the requirements outlined below.
 
-Although these requirements ideally should not exist, maintaining compatibility with existing WinMD files supported by upstream CsWin32 takes precedence.
+### Supported architectures & OS platforms
+
+To prevent the generator from generating a type that is not compatible with the current platforms and OS platforms configured in the project that consumes the generator and to report a diagnostic for it, define a `SupportedArchitectureAttribute` & `SupportedOSPlatform` with an enum as its first parameter, and apply it to the type.
+
+```cs
+[Flags]
+public enum Architecture
+{
+    None = 0,
+    X86 = 1,
+    X64 = 2,
+    Arm64 = 4,
+    All = Architecture.X64 | Architecture.X86 | Architecture.Arm64
+}
+
+public class SupportedArchitectureAttribute(Architecture arch) : Attribute { }
+
+[AttributeUsage(AttributeTargets.Struct | AttributeTargets.Interface | AttributeTargets.Method, AllowMultiple = false)]
+public class SupportedOSPlatformAttribute(string OSPlatform) : Attribute { }
+```
+
+```cs
+[DllImport(...)]
+[SupportedArchitecture(Windows.Win32.Foundation.Metadata.Architecture.X64 | Windows.Win32.Foundation.Metadata.Architecture.Arm64)]
+[SupportedOSPlatform("windows5.0")]
+public static extern IntPtr SetWindowLongPtrW(...);
+```
 
 ### Native handles
 

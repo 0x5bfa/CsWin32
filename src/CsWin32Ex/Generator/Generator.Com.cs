@@ -78,7 +78,7 @@ public partial class Generator
 
 		// Marshaling of this interface is not allowed here. Emit the struct.
 		TypeDeclarationSyntax structDecl = this.DeclareInterfaceAsStruct(typeDefHandle, baseTypes, context);
-		if (!this.options.AllowMarshaling)
+		if (!this._options.AllowMarshaling)
 		{
 			// Marshaling isn't allowed over the entire compilation, so emit the interface nested under the struct so
 			// it can be implemented and enable CCW scenarios.
@@ -101,10 +101,10 @@ public partial class Generator
 		IdentifierNameSyntax vtblFieldName = IdentifierName("lpVtbl");
 		var members = new List<MemberDeclarationSyntax>();
 		var vtblMembers = new List<MemberDeclarationSyntax>();
-		TypeSyntaxSettings typeSettings = context.Filter(this.comSignatureTypeSettings);
+		TypeSyntaxSettings typeSettings = context.Filter(this._comSignatureTypeSettings);
 		IdentifierNameSyntax pThisParameterName = IdentifierName("pThis");
 		ExpressionSyntax pThis = ThisPointer(PointerType(ifaceName));
-		ParameterSyntax? ccwThisParameter = this.canUseUnmanagedCallersOnlyAttribute && !this.options.AllowMarshaling && originalIfaceName != "IUnknown" && originalIfaceName != "IDispatch" && !this.IsNonCOMInterface(typeDef) ? Parameter(pThisParameterName.Identifier).WithType(PointerType(ifaceName).WithTrailingTrivia(Space)) : null;
+		ParameterSyntax? ccwThisParameter = this._canUseUnmanagedCallersOnlyAttribute && !this._options.AllowMarshaling && originalIfaceName != "IUnknown" && originalIfaceName != "IDispatch" && !this.IsNonCOMInterface(typeDef) ? Parameter(pThisParameterName.Identifier).WithType(PointerType(ifaceName).WithTrailingTrivia(Space)) : null;
 		List<QualifiedMethodDefinitionHandle> ccwMethodsToSkip = new();
 		List<MemberDeclarationSyntax> ccwEntrypointMethods = new();
 		IdentifierNameSyntax vtblParamName = IdentifierName("vtable");
@@ -569,7 +569,7 @@ public partial class Generator
 
 		string actualIfaceName = this.Reader.GetString(typeDef.Name);
 		IdentifierNameSyntax ifaceName = interfaceAsSubtype ? NestedCOMInterfaceName : IdentifierName(actualIfaceName);
-		TypeSyntaxSettings typeSettings = this.comSignatureTypeSettings;
+		TypeSyntaxSettings typeSettings = this._comSignatureTypeSettings;
 
 		// It is imperative that we generate methods for all base interfaces as well, ahead of any implemented by *this* interface.
 		var allMethods = new List<MethodDefinitionHandle>();
@@ -604,7 +604,7 @@ public partial class Generator
 				else
 				{
 					baseTypeHandle.Generator.RequestInteropType(baseTypeHandle.DefinitionHandle, context);
-					TypeSyntax baseTypeSyntax = new HandleTypeHandleInfo(baseTypeHandle.Reader, baseTypeHandle.DefinitionHandle).ToTypeSyntax(this.comSignatureTypeSettings, GeneratingElement.InterfaceMember, null).Type;
+					TypeSyntax baseTypeSyntax = new HandleTypeHandleInfo(baseTypeHandle.Reader, baseTypeHandle.DefinitionHandle).ToTypeSyntax(this._comSignatureTypeSettings, GeneratingElement.InterfaceMember, null).Type;
 					if (interfaceAsSubtype)
 					{
 						baseTypeSyntax = QualifiedName(
@@ -678,7 +678,7 @@ public partial class Generator
 					TypeSyntax returnType = returnTypeDetails.Type;
 					AttributeSyntax? returnsAttribute = MarshalAs(returnTypeDetails.MarshalAsAttribute, returnTypeDetails.NativeArrayInfo);
 
-					ParameterListSyntax? parameterList = this.CreateParameterList(methodDefinition, signature, this.comSignatureTypeSettings, GeneratingElement.InterfaceMember);
+					ParameterListSyntax? parameterList = this.CreateParameterList(methodDefinition, signature, this._comSignatureTypeSettings, GeneratingElement.InterfaceMember);
 
 					bool preserveSig = interfaceAsSubtype || this.UsePreserveSigForComMethod(methodDefinition, signature, actualIfaceName, methodName);
 					if (!preserveSig)
@@ -760,7 +760,7 @@ public partial class Generator
 				.WithBaseList(BaseList(SeparatedList(baseTypeSyntaxList)));
 		}
 
-		if (this.generateSupportedOSPlatformAttributesOnInterfaces && this.GetSupportedOSPlatformAttribute(typeDef.GetCustomAttributes()) is AttributeSyntax supportedOSPlatformAttribute)
+		if (this._generateSupportedOSPlatformAttributesOnInterfaces && this.GetSupportedOSPlatformAttribute(typeDef.GetCustomAttributes()) is AttributeSyntax supportedOSPlatformAttribute)
 		{
 			ifaceDeclaration = ifaceDeclaration.AddAttributeLists(AttributeList().AddAttributes(supportedOSPlatformAttribute));
 		}
@@ -779,7 +779,7 @@ public partial class Generator
 				.WithMembers(List<MemberDeclarationSyntax>(friendlyOverloads))
 				.WithModifiers(TokenList(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.StaticKeyword), TokenWithSpace(SyntaxKind.PartialKeyword)))
 				.AddAttributeLists(AttributeList().AddAttributes(GeneratedCodeAttribute));
-			this.volatileCode.AddComInterfaceExtension(friendlyOverloadClass);
+			this._volatileCode.AddComInterfaceExtension(friendlyOverloadClass);
 		}
 
 		return ifaceDeclaration;
@@ -879,11 +879,11 @@ public partial class Generator
 	{
 		return !IsHresult(signature.ReturnType)
 			|| (methodDefinition.ImplAttributes & MethodImplAttributes.PreserveSig) == MethodImplAttributes.PreserveSig
-			|| this.options.ComInterop.PreserveSigMethods.Contains("*")
+			|| this._options.ComInterop.PreserveSigMethods.Contains("*")
 			|| this.FindInteropDecorativeAttribute(methodDefinition.GetCustomAttributes(), CanReturnMultipleSuccessValuesAttribute) is not null
 			|| this.FindInteropDecorativeAttribute(methodDefinition.GetCustomAttributes(), CanReturnErrorsAsSuccessAttribute) is not null
-			|| this.options.ComInterop.PreserveSigMethods.Contains($"{ifaceName}.{methodName}")
-			|| this.options.ComInterop.PreserveSigMethods.Contains(ifaceName.ToString());
+			|| this._options.ComInterop.PreserveSigMethods.Contains($"{ifaceName}.{methodName}")
+			|| this._options.ComInterop.PreserveSigMethods.Contains(ifaceName.ToString());
 	}
 
 	private ISet<string> GetDeclarableProperties(IEnumerable<MethodDefinition> methods, string ifaceName, bool allowNonConsecutiveAccessors, Context context)
@@ -935,7 +935,7 @@ public partial class Generator
 		propertyName = null;
 		accessorKind = null;
 		propertyType = null;
-		TypeSyntaxSettings syntaxSettings = context.Filter(this.comSignatureTypeSettings);
+		TypeSyntaxSettings syntaxSettings = context.Filter(this._comSignatureTypeSettings);
 
 		if ((methodDefinition.Attributes & MethodAttributes.SpecialName) != MethodAttributes.SpecialName)
 		{
@@ -1026,12 +1026,12 @@ public partial class Generator
 			return false;
 		}
 
-		if (this.comIIDInterfacePredefined)
+		if (this._comIIDInterfacePredefined)
 		{
 			return true;
 		}
 
-		this.volatileCode.GenerateSpecialType(IComIIDGuidInterfaceName.Identifier.ValueText, delegate
+		this._volatileCode.GenerateSpecialType(IComIIDGuidInterfaceName.Identifier.ValueText, delegate
 		{
 			// internal static abstract ref readonly Guid Guid { get; }
 			PropertyDeclarationSyntax guidProperty = PropertyDeclaration(IdentifierName(nameof(Guid)).WithTrailingTrivia(Space), ComIIDGuidPropertyName.Identifier)
@@ -1049,7 +1049,7 @@ public partial class Generator
 				.AddModifiers(Token(this.Visibility))
 				.AddMembers(guidProperty);
 
-			this.volatileCode.AddSpecialType(IComIIDGuidInterfaceName.Identifier.ValueText, ifaceDecl);
+			this._volatileCode.AddSpecialType(IComIIDGuidInterfaceName.Identifier.ValueText, ifaceDecl);
 		});
 
 		return true;

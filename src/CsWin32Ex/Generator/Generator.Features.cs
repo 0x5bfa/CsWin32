@@ -4,21 +4,21 @@ namespace CsWin32Ex;
 
 public partial class Generator
 {
-	private readonly bool canUseUnscopedRef;
-	private readonly bool canUseSpan;
-	private readonly bool canCallCreateSpan;
-	private readonly bool canUseUnsafeAsRef;
-	private readonly bool canUseUnsafeAdd;
-	private readonly bool canUseUnsafeNullRef;
-	private readonly bool canUseUnsafeSkipInit;
-	private readonly bool canUseUnmanagedCallersOnlyAttribute;
-	private readonly bool canUseSetLastPInvokeError;
-	private readonly bool overloadResolutionPriorityAttributePredefined;
-	private readonly bool unscopedRefAttributePredefined;
-	private readonly INamedTypeSymbol? runtimeFeatureClass;
-	private readonly bool generateSupportedOSPlatformAttributes;
-	private readonly bool generateSupportedOSPlatformAttributesOnInterfaces; // only supported on net6.0 (https://github.com/dotnet/runtime/pull/48838)
-	private readonly bool generateDefaultDllImportSearchPathsAttribute;
+	private readonly bool _canUseUnscopedRef;
+	private readonly bool _canUseSpan;
+	private readonly bool _canCallCreateSpan;
+	private readonly bool _canUseUnsafeAsRef;
+	private readonly bool _canUseUnsafeAdd;
+	private readonly bool _canUseUnsafeNullRef;
+	private readonly bool _canUseUnsafeSkipInit;
+	private readonly bool _canUseUnmanagedCallersOnlyAttribute;
+	private readonly bool _canUseSetLastPInvokeError;
+	private readonly bool _overloadResolutionPriorityAttributePredefined;
+	private readonly bool _unscopedRefAttributePredefined;
+	private readonly INamedTypeSymbol? _runtimeFeatureClass;
+	private readonly bool _generateSupportedOSPlatformAttributes;
+	private readonly bool _generateSupportedOSPlatformAttributesOnInterfaces; // only supported on net6.0 (https://github.com/dotnet/runtime/pull/48838)
+	private readonly bool _generateDefaultDllImportSearchPathsAttribute;
 	private readonly Dictionary<Feature, bool> supportedFeatures = new();
 
 	private void DeclareOverloadResolutionPriorityAttributeIfNecessary()
@@ -29,7 +29,7 @@ public partial class Generator
 			throw new GenerationFailedException("The OverloadResolutionPriorityAttribute requires C# 13 or later.");
 		}
 
-		if (this.overloadResolutionPriorityAttributePredefined)
+		if (this._overloadResolutionPriorityAttributePredefined)
 		{
 			return;
 		}
@@ -37,12 +37,12 @@ public partial class Generator
 		// Always generate these in the context of the most common metadata so we don't emit it more than once.
 		if (!this.IsWin32Sdk)
 		{
-			this.MainGenerator.volatileCode.GenerationTransaction(() => this.MainGenerator.DeclareOverloadResolutionPriorityAttributeIfNecessary());
+			this.MainGenerator._volatileCode.GenerationTransaction(() => this.MainGenerator.DeclareOverloadResolutionPriorityAttributeIfNecessary());
 			return;
 		}
 
 		const string name = "OverloadResolutionPriorityAttribute";
-		this.volatileCode.GenerateSpecialType(name, delegate
+		this._volatileCode.GenerateSpecialType(name, delegate
 		{
 			// This is a polyfill attribute, so never promote visibility to public.
 			if (!TryFetchTemplate(name, this, out CompilationUnitSyntax? compilationUnit))
@@ -51,13 +51,13 @@ public partial class Generator
 			}
 
 			MemberDeclarationSyntax templateNamespace = compilationUnit.Members.Single();
-			this.volatileCode.AddSpecialType(name, templateNamespace, topLevel: true);
+			this._volatileCode.AddSpecialType(name, templateNamespace, topLevel: true);
 		});
 	}
 
 	private void DeclareUnscopedRefAttributeIfNecessary()
 	{
-		if (this.unscopedRefAttributePredefined)
+		if (this._unscopedRefAttributePredefined)
 		{
 			return;
 		}
@@ -65,12 +65,12 @@ public partial class Generator
 		// Always generate these in the context of the most common metadata so we don't emit it more than once.
 		if (!this.IsWin32Sdk)
 		{
-			this.MainGenerator.volatileCode.GenerationTransaction(() => this.MainGenerator.DeclareUnscopedRefAttributeIfNecessary());
+			this.MainGenerator._volatileCode.GenerationTransaction(() => this.MainGenerator.DeclareUnscopedRefAttributeIfNecessary());
 			return;
 		}
 
 		const string name = "UnscopedRefAttribute";
-		this.volatileCode.GenerateSpecialType(name, delegate
+		this._volatileCode.GenerateSpecialType(name, delegate
 		{
 			ExpressionSyntax[] uses = new[]
 			{
@@ -90,7 +90,7 @@ public partial class Generator
 			NamespaceDeclarationSyntax nsDeclaration = NamespaceDeclaration(ParseName("System.Diagnostics.CodeAnalysis"))
 				.AddMembers(attrDecl);
 
-			this.volatileCode.AddSpecialType(name, nsDeclaration, topLevel: true);
+			this._volatileCode.AddSpecialType(name, nsDeclaration, topLevel: true);
 		});
 	}
 
@@ -102,7 +102,7 @@ public partial class Generator
 		}
 
 		// A feature requires a member on the class, and we ignore features that have the `[RequiresPreviewFeatures]` attribute on them.
-		bool IsRuntimeFeatureSupported(string name) => this.runtimeFeatureClass?.GetMembers(name).FirstOrDefault()?.GetAttributes().IsEmpty is true;
+		bool IsRuntimeFeatureSupported(string name) => this._runtimeFeatureClass?.GetMembers(name).FirstOrDefault()?.GetAttributes().IsEmpty is true;
 
 		result = feature switch
 		{

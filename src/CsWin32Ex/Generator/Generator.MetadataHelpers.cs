@@ -15,7 +15,7 @@ public partial class Generator
 		=> this.FindAttribute(customAttributeHandles, InteropDecorationNamespace, attributeName);
 
 	internal CustomAttribute? FindAttribute(CustomAttributeHandleCollection? customAttributeHandles, string attributeNamespace, string attributeName)
-		=> WinMDFileHelper.FindAttribute(this.Reader, customAttributeHandles, attributeNamespace, attributeName);
+		=> WinMDFileHelper.TryGetAttributeOn(this.Reader, customAttributeHandles, attributeNamespace, attributeName);
 
 	internal IdentifierNameSyntax? FindAssociatedEnum(CustomAttributeHandleCollection? customAttributeHandles)
 	{
@@ -35,7 +35,7 @@ public partial class Generator
 			return this.Manager.TryGetTypeDefinitionHandle(new QualifiedTypeReferenceHandle(this, typeRefHandle), out typeDefHandle);
 		}
 
-		if (this.MetadataIndex.TryGetTypeDefHandle(this.Reader, typeRefHandle, out TypeDefinitionHandle localTypeDefHandle))
+		if (this.WinMDIndexer.TryGetTypeDefHandle(this.Reader, typeRefHandle, out TypeDefinitionHandle localTypeDefHandle))
 		{
 			typeDefHandle = new QualifiedTypeDefinitionHandle(this, localTypeDefHandle);
 			return true;
@@ -45,7 +45,7 @@ public partial class Generator
 		return false;
 	}
 
-	internal bool TryGetTypeDefHandle(TypeReferenceHandle typeRefHandle, out TypeDefinitionHandle typeDefHandle) => this.MetadataIndex.TryGetTypeDefHandle(this.Reader, typeRefHandle, out typeDefHandle);
+	internal bool TryGetTypeDefHandle(TypeReferenceHandle typeRefHandle, out TypeDefinitionHandle typeDefHandle) => this.WinMDIndexer.TryGetTypeDefHandle(this.Reader, typeRefHandle, out typeDefHandle);
 
 	internal bool TryGetTypeDefHandle(TypeReference typeRef, out TypeDefinitionHandle typeDefHandle) => this.TryGetTypeDefHandle(typeRef.Namespace, typeRef.Name, out typeDefHandle);
 
@@ -196,7 +196,7 @@ public partial class Generator
 		foreach (FieldDefinitionHandle fieldHandle in typeDef.GetFields())
 		{
 			FieldDefinition field = this.Reader.GetFieldDefinition(fieldHandle);
-			if (WinMDFileHelper.FindAttribute(this.Reader, field.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
+			if (WinMDFileHelper.TryGetAttributeOn(this.Reader, field.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
 			{
 				return true;
 			}
@@ -323,7 +323,7 @@ public partial class Generator
 
 	private bool IsManagedType(TypeDefinitionHandle typeDefinitionHandle)
 	{
-		if (this.managedTypesCheck.TryGetValue(typeDefinitionHandle, out bool result))
+		if (this._managedTypesCheck.TryGetValue(typeDefinitionHandle, out bool result))
 		{
 			return result;
 		}
@@ -337,24 +337,24 @@ public partial class Generator
 		{
 			foreach (var fixup in cycleFixups)
 			{
-				if (this.managedTypesCheck[fixup.Key])
+				if (this._managedTypesCheck[fixup.Key])
 				{
 					foreach (TypeDefinitionHandle dependent in fixup.Value)
 					{
-						this.managedTypesCheck[dependent] = true;
+						this._managedTypesCheck[dependent] = true;
 					}
 				}
 			}
 
 			// This may have changed the result we are to return, so look up the current answer.
-			result = this.managedTypesCheck[typeDefinitionHandle];
+			result = this._managedTypesCheck[typeDefinitionHandle];
 		}
 
 		return result;
 
 		bool? Helper(TypeDefinitionHandle typeDefinitionHandle)
 		{
-			if (this.managedTypesCheck.TryGetValue(typeDefinitionHandle, out bool result))
+			if (this._managedTypesCheck.TryGetValue(typeDefinitionHandle, out bool result))
 			{
 				return result;
 			}
@@ -370,15 +370,15 @@ public partial class Generator
 			{
 				if ((typeDef.Attributes & TypeAttributes.Interface) == TypeAttributes.Interface)
 				{
-					result = this.options.AllowMarshaling && !this.IsNonCOMInterface(typeDef);
-					this.managedTypesCheck.Add(typeDefinitionHandle, result);
+					result = this._options.AllowMarshaling && !this.IsNonCOMInterface(typeDef);
+					this._managedTypesCheck.Add(typeDefinitionHandle, result);
 					return result;
 				}
 
 				if ((typeDef.Attributes & TypeAttributes.Class) == TypeAttributes.Class && this.Reader.StringComparer.Equals(typeDef.Name, "Apis"))
 				{
 					// We arguably should never be asked about this class, which is never generated.
-					this.managedTypesCheck.Add(typeDefinitionHandle, false);
+					this._managedTypesCheck.Add(typeDefinitionHandle, false);
 					return false;
 				}
 
@@ -387,7 +387,7 @@ public partial class Generator
 				{
 					if (this.IsTypeDefStruct(typeDef))
 					{
-						this.managedTypesCheck.Add(typeDefinitionHandle, false);
+						this._managedTypesCheck.Add(typeDefinitionHandle, false);
 						return false;
 					}
 					else
@@ -436,7 +436,7 @@ public partial class Generator
 										switch (result)
 										{
 											case true:
-												this.managedTypesCheck.Add(typeDefinitionHandle, true);
+												this._managedTypesCheck.Add(typeDefinitionHandle, true);
 												break;
 											case null:
 												cycleFixups ??= new();
@@ -463,21 +463,21 @@ public partial class Generator
 							}
 						}
 
-						this.managedTypesCheck.Add(typeDefinitionHandle, false);
+						this._managedTypesCheck.Add(typeDefinitionHandle, false);
 						return false;
 					}
 				}
 				else if (this.Reader.StringComparer.Equals(baseName, nameof(Enum)) && this.Reader.StringComparer.Equals(baseNamespace, nameof(System)))
 				{
-					this.managedTypesCheck.Add(typeDefinitionHandle, false);
+					this._managedTypesCheck.Add(typeDefinitionHandle, false);
 					return false;
 				}
 				else if (this.Reader.StringComparer.Equals(baseName, nameof(MulticastDelegate)) && this.Reader.StringComparer.Equals(baseNamespace, nameof(System)))
 				{
 					// Delegates appear as unmanaged function pointers when using structs instead of COM interfaces.
 					// But certain delegates are never declared as delegates.
-					result = this.options.AllowMarshaling && !this.IsUntypedDelegate(typeDef);
-					this.managedTypesCheck.Add(typeDefinitionHandle, result);
+					result = this._options.AllowMarshaling && !this.IsUntypedDelegate(typeDef);
+					this._managedTypesCheck.Add(typeDefinitionHandle, result);
 					return result;
 				}
 
@@ -485,7 +485,7 @@ public partial class Generator
 			}
 			catch (Exception ex)
 			{
-				throw new GenerationFailedException($"Unable to determine if {new HandleTypeHandleInfo(this.Reader, typeDefinitionHandle).ToTypeSyntax(this.errorMessageTypeSettings, GeneratingElement.Other, null)} is a managed type.", ex);
+				throw new GenerationFailedException($"Unable to determine if {new HandleTypeHandleInfo(this.Reader, typeDefinitionHandle).ToTypeSyntax(this._errorMessageTypeSettings, GeneratingElement.Other, null)} is a managed type.", ex);
 			}
 		}
 	}
@@ -537,7 +537,7 @@ public partial class Generator
 	private AttributeSyntax? GetSupportedOSPlatformAttribute(CustomAttributeHandleCollection attributes)
 	{
 		AttributeSyntax? supportedOSPlatformAttribute = null;
-		if (this.generateSupportedOSPlatformAttributes && this.FindInteropDecorativeAttribute(attributes, "SupportedOSPlatformAttribute") is CustomAttribute templateOSPlatformAttribute)
+		if (this._generateSupportedOSPlatformAttributes && this.FindInteropDecorativeAttribute(attributes, "SupportedOSPlatformAttribute") is CustomAttribute templateOSPlatformAttribute)
 		{
 			CustomAttributeValue<TypeSyntax> args = templateOSPlatformAttribute.DecodeValue(CustomAttributeTypeProvider.Instance);
 			supportedOSPlatformAttribute = SupportedOSPlatformAttributeSyntax.AddArgumentListArguments(AttributeArgument(LiteralExpression(SyntaxKind.StringLiteralExpression, Literal((string)args.FixedArguments[0].Value!))));
@@ -615,7 +615,7 @@ public partial class Generator
 
 		if (foundApiWithMismatchedPlatform)
 		{
-			throw new PlatformIncompatibleException($"The requested API ({methodName}) was found but is not available given the target platform ({this.compilation?.Options.Platform}).");
+			throw new PlatformIncompatibleException($"The requested API ({methodName}) was found but is not available given the target platform ({this._compilation?.Options.Platform}).");
 		}
 
 		return null;
