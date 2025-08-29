@@ -31,7 +31,7 @@ public partial class Generator
 				throw new GenerationFailedException("Unable to find release method named: " + releaseMethod);
 			}
 
-			MethodDefinition releaseMethodDef = this.Reader.GetMethodDefinition(releaseMethodHandle.Value);
+			MethodDefinition releaseMethodDef = this.WinMDReader.GetMethodDefinition(releaseMethodHandle.Value);
 			string releaseMethodModule = this.GetNormalizedModuleName(releaseMethodDef.GetImport());
 
 			IdentifierNameSyntax? safeHandleTypeIdentifier = IdentifierName(safeHandleClassName);
@@ -330,7 +330,7 @@ public partial class Generator
 		}
 
 		releaseMethodName = null;
-		TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefHandle);
+		TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(typeDefHandle);
 
 		// Structs with InvalidHandleValue attributes are handles.
 		if (this.HasAnyInvalidHandleValueAttributes(typeDef))
@@ -339,7 +339,7 @@ public partial class Generator
 		}
 
 		// Special case handles that do not carry RAIIFree or InvalidHandleValue attributes.
-		return this.Reader.StringComparer.Equals(typeDef.Name, "HWND");
+		return this.WinMDReader.StringComparer.Equals(typeDef.Name, "HWND");
 	}
 
 	private QualifiedTypeDefinition GetQualifiedTypeDefinition(EntityHandle handle)
@@ -386,8 +386,8 @@ public partial class Generator
 	{
 		foreach (CustomAttributeHandle ah in typeDef.GetCustomAttributes())
 		{
-			CustomAttribute a = this.Reader.GetCustomAttribute(ah);
-			if (WinMDFileHelper.IsAttribute(this.Reader, a, InteropDecorationNamespace, InvalidHandleValueAttribute))
+			CustomAttribute a = this.WinMDReader.GetCustomAttribute(ah);
+			if (WinMDFileHelper.IsAttribute(this.WinMDReader, a, InteropDecorationNamespace, InvalidHandleValueAttribute))
 			{
 				return true;
 			}

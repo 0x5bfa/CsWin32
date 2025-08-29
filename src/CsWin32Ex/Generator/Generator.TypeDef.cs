@@ -24,10 +24,10 @@ public partial class Generator
 
 		bool Resolve(TypeDefinitionHandle tdh, [NotNullWhen(true)] out TypeHandleInfo? fieldType)
 		{
-			TypeDefinition td = this.Reader.GetTypeDefinition(tdh);
+			TypeDefinition td = this.WinMDReader.GetTypeDefinition(tdh);
 			foreach (FieldDefinitionHandle fdh in td.GetFields())
 			{
-				FieldDefinition fd = this.Reader.GetFieldDefinition(fdh);
+				FieldDefinition fd = this.WinMDReader.GetFieldDefinition(fdh);
 				fieldType = fd.DecodeSignature(SignatureHandleProvider.Instance, null);
 				return true;
 			}
@@ -46,24 +46,24 @@ public partial class Generator
 		{
 			if (handleInfo.Handle.Kind == HandleKind.TypeDefinition)
 			{
-				TypeDefinition typeDef = this.Reader.GetTypeDefinition((TypeDefinitionHandle)handleInfo.Handle);
+				TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition((TypeDefinitionHandle)handleInfo.Handle);
 				return this.IsTypeDefStruct(typeDef);
 			}
 			else if (handleInfo.Handle.Kind == HandleKind.TypeReference)
 			{
 				if (this.TryGetTypeDefHandle((TypeReferenceHandle)handleInfo.Handle, out TypeDefinitionHandle tdh))
 				{
-					TypeDefinition typeDef = this.Reader.GetTypeDefinition(tdh);
+					TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(tdh);
 					return this.IsTypeDefStruct(typeDef);
 				}
 				else if (this.Manager is object)
 				{
-					TypeReference typeReference = this.Reader.GetTypeReference((TypeReferenceHandle)handleInfo.Handle);
+					TypeReference typeReference = this.WinMDReader.GetTypeReference((TypeReferenceHandle)handleInfo.Handle);
 					if (this.Manager.TryGetTargetGenerator(new QualifiedTypeReference(this, typeReference), out Generator? targetGenerator))
 					{
-						if (targetGenerator.TryGetTypeDefHandle(this.Reader.GetString(typeReference.Namespace), this.Reader.GetString(typeReference.Name), out TypeDefinitionHandle foreignTypeDefHandle))
+						if (targetGenerator.TryGetTypeDefHandle(this.WinMDReader.GetString(typeReference.Namespace), this.WinMDReader.GetString(typeReference.Name), out TypeDefinitionHandle foreignTypeDefHandle))
 						{
-							TypeDefinition foreignTypeDef = targetGenerator.Reader.GetTypeDefinition(foreignTypeDefHandle);
+							TypeDefinition foreignTypeDef = targetGenerator.WinMDReader.GetTypeDefinition(foreignTypeDefHandle);
 							return targetGenerator.IsTypeDefStruct(foreignTypeDef);
 						}
 					}
@@ -83,7 +83,7 @@ public partial class Generator
 	/// </summary>
 	private StructDeclarationSyntax DeclareTypeDefStruct(TypeDefinition typeDef, TypeDefinitionHandle typeDefHandle)
 	{
-		IdentifierNameSyntax name = IdentifierName(this.Reader.GetString(typeDef.Name));
+		IdentifierNameSyntax name = IdentifierName(this.WinMDReader.GetString(typeDef.Name));
 		bool isHandle = this.IsHandle(typeDefHandle, out string? freeMethodName);
 		if (freeMethodName is not null)
 		{
@@ -92,8 +92,8 @@ public partial class Generator
 
 		TypeSyntaxSettings typeSettings = isHandle ? this._fieldOfHandleTypeDefTypeSettings : this._fieldTypeSettings;
 
-		FieldDefinition fieldDef = this.Reader.GetFieldDefinition(typeDef.GetFields().Single());
-		string fieldName = this.Reader.GetString(fieldDef.Name);
+		FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(typeDef.GetFields().Single());
+		string fieldName = this.WinMDReader.GetString(fieldDef.Name);
 		IdentifierNameSyntax fieldIdentifierName = SafeIdentifierName(fieldName);
 		VariableDeclaratorSyntax fieldDeclarator = VariableDeclarator(fieldIdentifierName.Identifier);
 		CustomAttributeHandleCollection fieldAttributes = fieldDef.GetCustomAttributes();
@@ -176,7 +176,7 @@ public partial class Generator
 		foreach (string alsoUsableForValue in this.GetAlsoUsableForValues(typeDef))
 		{
 			// Add implicit conversion operators for each AlsoUsableFor attribute on the struct.
-			var fullyQualifiedAlsoUsableForValue = $"{this.Reader.GetString(typeDef.Namespace)}.{alsoUsableForValue}";
+			var fullyQualifiedAlsoUsableForValue = $"{this.WinMDReader.GetString(typeDef.Namespace)}.{alsoUsableForValue}";
 			if (this.TryGenerateType(fullyQualifiedAlsoUsableForValue, out _))
 			{
 				IdentifierNameSyntax alsoUsableForTypeSymbolName = IdentifierName(alsoUsableForValue);
@@ -383,8 +383,8 @@ public partial class Generator
 		List<string> alsoUsableForValues = new();
 		foreach (CustomAttributeHandle ah in typeDef.GetCustomAttributes())
 		{
-			CustomAttribute a = this.Reader.GetCustomAttribute(ah);
-			if (WinMDFileHelper.IsAttribute(this.Reader, a, InteropDecorationNamespace, AlsoUsableForAttribute))
+			CustomAttribute a = this.WinMDReader.GetCustomAttribute(ah);
+			if (WinMDFileHelper.IsAttribute(this.WinMDReader, a, InteropDecorationNamespace, AlsoUsableForAttribute))
 			{
 				CustomAttributeValue<TypeSyntax> attributeData = a.DecodeValue(CustomAttributeTypeProvider.Instance);
 				string alsoUsableForValue = (string)(attributeData.FixedArguments[0].Value ?? throw new GenerationFailedException("Missing AlsoUsableFor attribute."));

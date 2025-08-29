@@ -5,7 +5,7 @@ namespace CsWin32Ex;
 public partial class Generator
 {
 	/// <inheritdoc/>
-	public bool TryGetEnumName(string enumValueName, [NotNullWhen(true)] out string? declaringEnum) => this.WinMDIndexer.TryGetEnumName(this.Reader, enumValueName, out declaringEnum);
+	public bool TryGetEnumName(string enumValueName, [NotNullWhen(true)] out string? declaringEnum) => this.WinMDIndexer.TryGetEnumName(this.WinMDReader, enumValueName, out declaringEnum);
 
 	private EnumDeclarationSyntax DeclareEnum(TypeDefinition typeDef)
 	{
@@ -19,7 +19,7 @@ public partial class Generator
 		}
 
 		// Add associated constants.
-		foreach (CustomAttribute associatedConstAtt in WinMDFileHelper.FindAttributes(this.Reader, typeDef.GetCustomAttributes(), InteropDecorationNamespace, AssociatedConstantAttribute))
+		foreach (CustomAttribute associatedConstAtt in WinMDFileHelper.FindAttributes(this.WinMDReader, typeDef.GetCustomAttributes(), InteropDecorationNamespace, AssociatedConstantAttribute))
 		{
 			CustomAttributeValue<TypeSyntax> decodedAttribute = associatedConstAtt.DecodeValue(CustomAttributeTypeProvider.Instance);
 			if (decodedAttribute.FixedArguments.Length >= 1 && decodedAttribute.FixedArguments[0].Value is string constName)
@@ -36,7 +36,7 @@ public partial class Generator
 			throw new NotSupportedException("Unknown enum type.");
 		}
 
-		string? name = this.Reader.GetString(typeDef.Name);
+		string? name = this.WinMDReader.GetString(typeDef.Name);
 		EnumDeclarationSyntax result = EnumDeclaration(Identifier(name))
 			.WithMembers(SeparatedList<EnumMemberDeclarationSyntax>(enumValues))
 			.WithModifiers(TokenList(TokenWithSpace(this.Visibility)));
@@ -59,8 +59,8 @@ public partial class Generator
 
 		void AddEnumValue(FieldDefinitionHandle fieldDefHandle)
 		{
-			FieldDefinition fieldDef = this.Reader.GetFieldDefinition(fieldDefHandle);
-			string enumValueName = this.Reader.GetString(fieldDef.Name);
+			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
+			string enumValueName = this.WinMDReader.GetString(fieldDef.Name);
 			ConstantHandle valueHandle = fieldDef.GetDefaultValue();
 			if (valueHandle.IsNil)
 			{
@@ -69,7 +69,7 @@ public partial class Generator
 			}
 
 			bool enumBaseTypeIsSigned = enumBaseType is PredefinedTypeSyntax { Keyword: { RawKind: (int)SyntaxKind.LongKeyword or (int)SyntaxKind.IntKeyword or (int)SyntaxKind.ShortKeyword or (int)SyntaxKind.SByteKeyword } };
-			ExpressionSyntax enumValue = flagsEnum ? ToHexExpressionSyntax(this.Reader, valueHandle, enumBaseTypeIsSigned) : ToExpressionSyntax(this.Reader, valueHandle);
+			ExpressionSyntax enumValue = flagsEnum ? ToHexExpressionSyntax(this.WinMDReader, valueHandle, enumBaseTypeIsSigned) : ToExpressionSyntax(this.WinMDReader, valueHandle);
 			EnumMemberDeclarationSyntax enumMember = EnumMemberDeclaration(SafeIdentifier(enumValueName))
 				.WithEqualsValue(EqualsValueClause(enumValue));
 			enumValues.Add(enumMember);

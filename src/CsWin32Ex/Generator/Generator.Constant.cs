@@ -7,11 +7,11 @@ public partial class Generator
 	/// <inheritdoc/>
 	public void GenerateAllConstants(CancellationToken cancellationToken)
 	{
-		foreach (FieldDefinitionHandle fieldDefHandle in this.WinMDIndexer.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetFields()))
+		foreach (FieldDefinitionHandle fieldDefHandle in this.WinMDIndexer.Apis.SelectMany(api => this.WinMDReader.GetTypeDefinition(api).GetFields()))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
-			FieldDefinition fieldDef = this.Reader.GetFieldDefinition(fieldDefHandle);
+			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
 			if (this.IsCompatibleWithPlatform(fieldDef.GetCustomAttributes()))
 			{
 				try
@@ -57,7 +57,7 @@ public partial class Generator
 		bool anyMatch = false;
 		foreach (FieldDefinitionHandle fieldHandle in matchingFieldHandles)
 		{
-			FieldDefinition field = this.Reader.GetFieldDefinition(fieldHandle);
+			FieldDefinition field = this.WinMDReader.GetFieldDefinition(fieldHandle);
 			if (this.IsCompatibleWithPlatform(field.GetCustomAttributes()))
 			{
 				try
@@ -110,9 +110,9 @@ public partial class Generator
 				this.RequestConstant(matchingFieldHandles[0]);
 			});
 
-			FieldDefinition fd = this.Reader.GetFieldDefinition(matchingFieldHandles[0]);
-			TypeDefinition td = this.Reader.GetTypeDefinition(fd.GetDeclaringType());
-			preciseApi = ImmutableList.Create($"{this.Reader.GetString(td.Namespace)}.{this.Reader.GetString(fd.Name)}");
+			FieldDefinition fd = this.WinMDReader.GetFieldDefinition(matchingFieldHandles[0]);
+			TypeDefinition td = this.WinMDReader.GetTypeDefinition(fd.GetDeclaringType());
+			preciseApi = ImmutableList.Create($"{this.WinMDReader.GetString(td.Namespace)}.{this.WinMDReader.GetString(fd.Name)}");
 			return true;
 		}
 		else if (matchingFieldHandles.Count > 1)
@@ -120,9 +120,9 @@ public partial class Generator
 			preciseApi = ImmutableList.CreateRange(
 				matchingFieldHandles.Select(h =>
 				{
-					FieldDefinition fd = this.Reader.GetFieldDefinition(h);
-					TypeDefinition td = this.Reader.GetTypeDefinition(fd.GetDeclaringType());
-					return $"{this.Reader.GetString(td.Namespace)}.{this.Reader.GetString(fd.Name)}";
+					FieldDefinition fd = this.WinMDReader.GetFieldDefinition(h);
+					TypeDefinition td = this.WinMDReader.GetTypeDefinition(fd.GetDeclaringType());
+					return $"{this.WinMDReader.GetString(td.Namespace)}.{this.WinMDReader.GetString(fd.Name)}";
 				}));
 			return false;
 		}
@@ -135,15 +135,15 @@ public partial class Generator
 	{
 		this._volatileCode.GenerateConstant(fieldDefHandle, delegate
 		{
-			FieldDefinition fieldDef = this.Reader.GetFieldDefinition(fieldDefHandle);
+			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
 			FieldDeclarationSyntax constantDeclaration = this.DeclareConstant(fieldDef);
 
 			TypeHandleInfo fieldTypeInfo = fieldDef.DecodeSignature<TypeHandleInfo, SignatureHandleProvider.IGenericContext?>(SignatureHandleProvider.Instance, null) with { IsConstantField = true };
 			TypeDefinitionHandle? fieldType = null;
 			if (fieldTypeInfo is HandleTypeHandleInfo handleInfo && this.IsTypeDefStruct(handleInfo) && handleInfo.Handle.Kind == HandleKind.TypeReference)
 			{
-				TypeReference tr = this.Reader.GetTypeReference((TypeReferenceHandle)handleInfo.Handle);
-				string fieldTypeName = this.Reader.GetString(tr.Name);
+				TypeReference tr = this.WinMDReader.GetTypeReference((TypeReferenceHandle)handleInfo.Handle);
+				string fieldTypeName = this.WinMDReader.GetString(tr.Name);
 				if (!TypeDefsThatDoNotNestTheirConstants.Contains(fieldTypeName) && this.TryGetTypeDefHandle(tr, out TypeDefinitionHandle candidate))
 				{
 					fieldType = candidate;
@@ -209,8 +209,8 @@ public partial class Generator
 		unsafeRequired = false;
 		foreach (MethodDefinitionHandle methodDefHandle in targetTypeDef.GetMethods())
 		{
-			MethodDefinition methodDef = this.Reader.GetMethodDefinition(methodDefHandle);
-			if (this.Reader.StringComparer.Equals(methodDef.Name, ".ctor") && methodDef.GetParameters().Count == args.Count)
+			MethodDefinition methodDef = this.WinMDReader.GetMethodDefinition(methodDefHandle);
+			if (this.WinMDReader.StringComparer.Equals(methodDef.Name, ".ctor") && methodDef.GetParameters().Count == args.Count)
 			{
 				MethodSignature<TypeHandleInfo> ctorSignature = methodDef.DecodeSignature(SignatureHandleProvider.Instance, null);
 				var argExpressions = new ArgumentSyntax[args.Count];
@@ -242,8 +242,8 @@ public partial class Generator
 		int i = 0;
 		foreach (FieldDefinitionHandle fieldDefHandle in targetTypeDef.GetFields())
 		{
-			FieldDefinition fieldDef = this.Reader.GetFieldDefinition(fieldDefHandle);
-			string fieldName = this.Reader.GetString(fieldDef.Name);
+			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
+			string fieldName = this.WinMDReader.GetString(fieldDef.Name);
 			TypeHandleInfo fieldTypeInfo = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null) with { IsConstantField = true };
 			fieldAssignmentExpressions[i] = AssignmentExpression(
 				SyntaxKind.SimpleAssignmentExpression,
@@ -276,8 +276,8 @@ public partial class Generator
 		if (!this.TryGetTypeDefHandle(targetTypeRefHandle, out QualifiedTypeDefinitionHandle targetTypeDefHandle))
 		{
 			// Special case for System.Guid.
-			TypeReference typeRef = this.Reader.GetTypeReference(targetTypeRefHandle);
-			if (this.Reader.StringComparer.Equals(typeRef.Name, "Guid"))
+			TypeReference typeRef = this.WinMDReader.GetTypeReference(targetTypeRefHandle);
+			if (this.WinMDReader.StringComparer.Equals(typeRef.Name, "Guid"))
 			{
 				List<ReadOnlyMemory<char>> guidArgs = SplitConstantArguments(argsAsString);
 				unsafeRequired = false;
@@ -350,7 +350,7 @@ public partial class Generator
 
 	private FieldDeclarationSyntax DeclareConstant(FieldDefinition fieldDef)
 	{
-		string name = this.Reader.GetString(fieldDef.Name);
+		string name = this.WinMDReader.GetString(fieldDef.Name);
 		try
 		{
 			TypeHandleInfo fieldTypeInfo = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null) with { IsConstantField = true };
@@ -358,7 +358,7 @@ public partial class Generator
 			TypeSyntaxAndMarshaling fieldType = fieldTypeInfo.ToTypeSyntax(this._fieldTypeSettings, GeneratingElement.Constant, customAttributes);
 			bool requiresUnsafe = false;
 			ExpressionSyntax value =
-				fieldDef.GetDefaultValue() is { IsNil: false } constantHandle ? ToExpressionSyntax(this.Reader, constantHandle) :
+				fieldDef.GetDefaultValue() is { IsNil: false } constantHandle ? ToExpressionSyntax(this.WinMDReader, constantHandle) :
 				this.FindInteropDecorativeAttribute(customAttributes, nameof(GuidAttribute)) is CustomAttribute guidAttribute ? GuidValue(guidAttribute) :
 				this.FindInteropDecorativeAttribute(customAttributes, "ConstantAttribute") is CustomAttribute constantAttribute ? this.CreateConstant(constantAttribute, fieldTypeInfo, out requiresUnsafe) :
 				throw new NotSupportedException("Unsupported constant: " + name);
@@ -410,9 +410,9 @@ public partial class Generator
 		}
 		catch (Exception ex)
 		{
-			TypeDefinition typeDef = this.Reader.GetTypeDefinition(fieldDef.GetDeclaringType());
-			string typeName = this.Reader.GetString(typeDef.Name);
-			string? ns = this.Reader.GetString(typeDef.Namespace);
+			TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(fieldDef.GetDeclaringType());
+			string typeName = this.WinMDReader.GetString(typeDef.Name);
+			string? ns = this.WinMDReader.GetString(typeDef.Namespace);
 			throw new GenerationFailedException($"Failed creating field: {ns}.{typeName}.{name}", ex);
 		}
 	}

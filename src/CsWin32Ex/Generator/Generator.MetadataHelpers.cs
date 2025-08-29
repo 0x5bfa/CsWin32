@@ -15,7 +15,7 @@ public partial class Generator
 		=> this.FindAttribute(customAttributeHandles, InteropDecorationNamespace, attributeName);
 
 	internal CustomAttribute? FindAttribute(CustomAttributeHandleCollection? customAttributeHandles, string attributeNamespace, string attributeName)
-		=> WinMDFileHelper.TryGetAttributeOn(this.Reader, customAttributeHandles, attributeNamespace, attributeName);
+		=> WinMDFileHelper.TryGetAttributeOn(this.WinMDReader, customAttributeHandles, attributeNamespace, attributeName);
 
 	internal IdentifierNameSyntax? FindAssociatedEnum(CustomAttributeHandleCollection? customAttributeHandles)
 	{
@@ -35,7 +35,7 @@ public partial class Generator
 			return this.Manager.TryGetTypeDefinitionHandle(new QualifiedTypeReferenceHandle(this, typeRefHandle), out typeDefHandle);
 		}
 
-		if (this.WinMDIndexer.TryGetTypeDefHandle(this.Reader, typeRefHandle, out TypeDefinitionHandle localTypeDefHandle))
+		if (this.WinMDIndexer.TryGetTypeDefHandle(this.WinMDReader, typeRefHandle, out TypeDefinitionHandle localTypeDefHandle))
 		{
 			typeDefHandle = new QualifiedTypeDefinitionHandle(this, localTypeDefHandle);
 			return true;
@@ -45,16 +45,16 @@ public partial class Generator
 		return false;
 	}
 
-	internal bool TryGetTypeDefHandle(TypeReferenceHandle typeRefHandle, out TypeDefinitionHandle typeDefHandle) => this.WinMDIndexer.TryGetTypeDefHandle(this.Reader, typeRefHandle, out typeDefHandle);
+	internal bool TryGetTypeDefHandle(TypeReferenceHandle typeRefHandle, out TypeDefinitionHandle typeDefHandle) => this.WinMDIndexer.TryGetTypeDefHandle(this.WinMDReader, typeRefHandle, out typeDefHandle);
 
 	internal bool TryGetTypeDefHandle(TypeReference typeRef, out TypeDefinitionHandle typeDefHandle) => this.TryGetTypeDefHandle(typeRef.Namespace, typeRef.Name, out typeDefHandle);
 
 	internal bool TryGetTypeDefHandle(StringHandle @namespace, StringHandle name, out TypeDefinitionHandle typeDefHandle)
 	{
 		// PERF: Use an index
-		foreach (TypeDefinitionHandle tdh in this.Reader.TypeDefinitions)
+		foreach (TypeDefinitionHandle tdh in this.WinMDReader.TypeDefinitions)
 		{
-			TypeDefinition td = this.Reader.GetTypeDefinition(tdh);
+			TypeDefinition td = this.WinMDReader.GetTypeDefinition(tdh);
 			if (td.Name.Equals(name) && td.Namespace.Equals(@namespace))
 			{
 				typeDefHandle = tdh;
@@ -69,10 +69,10 @@ public partial class Generator
 	internal bool TryGetTypeDefHandle(string @namespace, string name, out TypeDefinitionHandle typeDefinitionHandle)
 	{
 		// PERF: Use an index
-		foreach (TypeDefinitionHandle tdh in this.Reader.TypeDefinitions)
+		foreach (TypeDefinitionHandle tdh in this.WinMDReader.TypeDefinitions)
 		{
-			TypeDefinition td = this.Reader.GetTypeDefinition(tdh);
-			if (this.Reader.StringComparer.Equals(td.Name, name) && this.Reader.StringComparer.Equals(td.Namespace, @namespace))
+			TypeDefinition td = this.WinMDReader.GetTypeDefinition(tdh);
+			if (this.WinMDReader.StringComparer.Equals(td.Name, name) && this.WinMDReader.StringComparer.Equals(td.Namespace, @namespace))
 			{
 				typeDefinitionHandle = tdh;
 				return true;
@@ -106,7 +106,7 @@ public partial class Generator
 
 	internal bool IsNonCOMInterface(TypeDefinition interfaceTypeDef)
 	{
-		if (this.Reader.StringComparer.Equals(interfaceTypeDef.Name, "IUnknown"))
+		if (this.WinMDReader.StringComparer.Equals(interfaceTypeDef.Name, "IUnknown"))
 		{
 			return false;
 		}
@@ -118,7 +118,7 @@ public partial class Generator
 			return true;
 		}
 
-		InterfaceImplementation baseIFace = this.Reader.GetInterfaceImplementation(firstBaseInterface);
+		InterfaceImplementation baseIFace = this.WinMDReader.GetInterfaceImplementation(firstBaseInterface);
 		TypeDefinitionHandle baseIFaceTypeDefHandle;
 		if (baseIFace.Interface.Kind == HandleKind.TypeDefinition)
 		{
@@ -136,10 +136,10 @@ public partial class Generator
 			return false;
 		}
 
-		return this.IsNonCOMInterface(this.Reader.GetTypeDefinition(baseIFaceTypeDefHandle));
+		return this.IsNonCOMInterface(this.WinMDReader.GetTypeDefinition(baseIFaceTypeDefHandle));
 	}
 
-	internal bool IsNonCOMInterface(TypeReferenceHandle interfaceTypeRefHandle) => this.TryGetTypeDefHandle(interfaceTypeRefHandle, out TypeDefinitionHandle tdh) && this.IsNonCOMInterface(this.Reader.GetTypeDefinition(tdh));
+	internal bool IsNonCOMInterface(TypeReferenceHandle interfaceTypeRefHandle) => this.TryGetTypeDefHandle(interfaceTypeRefHandle, out TypeDefinitionHandle tdh) && this.IsNonCOMInterface(this.WinMDReader.GetTypeDefinition(tdh));
 
 	internal bool IsInterface(HandleTypeHandleInfo typeInfo)
 	{
@@ -154,7 +154,7 @@ public partial class Generator
 			tdh = (TypeDefinitionHandle)typeInfo.Handle;
 		}
 
-		return !tdh.IsNil && (this.Reader.GetTypeDefinition(tdh).Attributes & TypeAttributes.Interface) == TypeAttributes.Interface;
+		return !tdh.IsNil && (this.WinMDReader.GetTypeDefinition(tdh).Attributes & TypeAttributes.Interface) == TypeAttributes.Interface;
 	}
 
 	internal bool IsInterface(TypeHandleInfo handleInfo)
@@ -175,14 +175,14 @@ public partial class Generator
 	{
 		if (this.TryGetTypeDefHandle(typeRefHandle, out TypeDefinitionHandle typeDefHandle))
 		{
-			TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefHandle);
+			TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(typeDefHandle);
 			return (typeDef.Attributes & TypeAttributes.Interface) == TypeAttributes.Interface;
 		}
 
 		return false;
 	}
 
-	internal bool IsDelegate(TypeDefinition typeDef) => (typeDef.Attributes & TypeAttributes.Class) == TypeAttributes.Class && typeDef.BaseType.Kind == HandleKind.TypeReference && this.Reader.StringComparer.Equals(this.Reader.GetTypeReference((TypeReferenceHandle)typeDef.BaseType).Name, nameof(MulticastDelegate));
+	internal bool IsDelegate(TypeDefinition typeDef) => (typeDef.Attributes & TypeAttributes.Class) == TypeAttributes.Class && typeDef.BaseType.Kind == HandleKind.TypeReference && this.WinMDReader.StringComparer.Equals(this.WinMDReader.GetTypeReference((TypeReferenceHandle)typeDef.BaseType).Name, nameof(MulticastDelegate));
 
 	internal bool IsStructWithFlexibleArray(HandleTypeHandleInfo typeInfo)
 	{
@@ -192,11 +192,11 @@ public partial class Generator
 
 	internal bool IsStructWithFlexibleArray(TypeDefinitionHandle typeDefHandle)
 	{
-		TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefHandle);
+		TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(typeDefHandle);
 		foreach (FieldDefinitionHandle fieldHandle in typeDef.GetFields())
 		{
-			FieldDefinition field = this.Reader.GetFieldDefinition(fieldHandle);
-			if (WinMDFileHelper.TryGetAttributeOn(this.Reader, field.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
+			FieldDefinition field = this.WinMDReader.GetFieldDefinition(fieldHandle);
+			if (WinMDFileHelper.TryGetAttributeOn(this.WinMDReader, field.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
 			{
 				return true;
 			}
@@ -232,7 +232,7 @@ public partial class Generator
 			}
 
 			// If the type comes from an external assembly, assume that structs are blittable and anything else is not.
-			TypeReference tr = this.Reader.GetTypeReference(trh);
+			TypeReference tr = this.WinMDReader.GetTypeReference(trh);
 			if (tr.ResolutionScope.Kind == HandleKind.AssemblyReference && handleElement.RawTypeKind is byte kind)
 			{
 				// Structs set 0x1, classes set 0x2.
@@ -289,7 +289,7 @@ public partial class Generator
 		if (typeHandleInfo.Handle.Kind == HandleKind.TypeDefinition)
 		{
 			var tdh = (TypeDefinitionHandle)typeHandleInfo.Handle;
-			delegateTypeDef = new(this, this.Reader.GetTypeDefinition(tdh));
+			delegateTypeDef = new(this, this.WinMDReader.GetTypeDefinition(tdh));
 			return this.IsDelegate(delegateTypeDef.Definition);
 		}
 
@@ -312,7 +312,7 @@ public partial class Generator
 		switch (typeHandle.Kind)
 		{
 			case HandleKind.TypeDefinition:
-				TypeDefinition typeDef = this.Reader.GetTypeDefinition((TypeDefinitionHandle)typeHandle);
+				TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition((TypeDefinitionHandle)typeHandle);
 				return typeDef.IsNested;
 			case HandleKind.TypeReference:
 				return this.TryGetTypeDefHandle((TypeReferenceHandle)typeHandle, out TypeDefinitionHandle typeDefHandle) && this.IsNestedType(typeDefHandle);
@@ -365,7 +365,7 @@ public partial class Generator
 				return null;
 			}
 
-			TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefinitionHandle);
+			TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(typeDefinitionHandle);
 			try
 			{
 				if ((typeDef.Attributes & TypeAttributes.Interface) == TypeAttributes.Interface)
@@ -375,7 +375,7 @@ public partial class Generator
 					return result;
 				}
 
-				if ((typeDef.Attributes & TypeAttributes.Class) == TypeAttributes.Class && this.Reader.StringComparer.Equals(typeDef.Name, "Apis"))
+				if ((typeDef.Attributes & TypeAttributes.Class) == TypeAttributes.Class && this.WinMDReader.StringComparer.Equals(typeDef.Name, "Apis"))
 				{
 					// We arguably should never be asked about this class, which is never generated.
 					this._managedTypesCheck.Add(typeDefinitionHandle, false);
@@ -383,7 +383,7 @@ public partial class Generator
 				}
 
 				this.GetBaseTypeInfo(typeDef, out StringHandle baseName, out StringHandle baseNamespace);
-				if (this.Reader.StringComparer.Equals(baseName, nameof(ValueType)) && this.Reader.StringComparer.Equals(baseNamespace, nameof(System)))
+				if (this.WinMDReader.StringComparer.Equals(baseName, nameof(ValueType)) && this.WinMDReader.StringComparer.Equals(baseNamespace, nameof(System)))
 				{
 					if (this.IsTypeDefStruct(typeDef))
 					{
@@ -394,7 +394,7 @@ public partial class Generator
 					{
 						foreach (FieldDefinitionHandle fieldHandle in typeDef.GetFields())
 						{
-							FieldDefinition fieldDef = this.Reader.GetFieldDefinition(fieldHandle);
+							FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldHandle);
 							try
 							{
 								TypeHandleInfo fieldType = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null);
@@ -459,7 +459,7 @@ public partial class Generator
 							}
 							catch (Exception ex)
 							{
-								throw new GenerationFailedException($"Unable to ascertain whether the {this.Reader.GetString(fieldDef.Name)} field represents a managed type.", ex);
+								throw new GenerationFailedException($"Unable to ascertain whether the {this.WinMDReader.GetString(fieldDef.Name)} field represents a managed type.", ex);
 							}
 						}
 
@@ -467,12 +467,12 @@ public partial class Generator
 						return false;
 					}
 				}
-				else if (this.Reader.StringComparer.Equals(baseName, nameof(Enum)) && this.Reader.StringComparer.Equals(baseNamespace, nameof(System)))
+				else if (this.WinMDReader.StringComparer.Equals(baseName, nameof(Enum)) && this.WinMDReader.StringComparer.Equals(baseNamespace, nameof(System)))
 				{
 					this._managedTypesCheck.Add(typeDefinitionHandle, false);
 					return false;
 				}
-				else if (this.Reader.StringComparer.Equals(baseName, nameof(MulticastDelegate)) && this.Reader.StringComparer.Equals(baseNamespace, nameof(System)))
+				else if (this.WinMDReader.StringComparer.Equals(baseName, nameof(MulticastDelegate)) && this.WinMDReader.StringComparer.Equals(baseNamespace, nameof(System)))
 				{
 					// Delegates appear as unmanaged function pointers when using structs instead of COM interfaces.
 					// But certain delegates are never declared as delegates.
@@ -485,7 +485,7 @@ public partial class Generator
 			}
 			catch (Exception ex)
 			{
-				throw new GenerationFailedException($"Unable to determine if {new HandleTypeHandleInfo(this.Reader, typeDefinitionHandle).ToTypeSyntax(this._errorMessageTypeSettings, GeneratingElement.Other, null)} is a managed type.", ex);
+				throw new GenerationFailedException($"Unable to determine if {new HandleTypeHandleInfo(this.WinMDReader, typeDefinitionHandle).ToTypeSyntax(this._errorMessageTypeSettings, GeneratingElement.Other, null)} is a managed type.", ex);
 			}
 		}
 	}
@@ -497,7 +497,7 @@ public partial class Generator
 			return null;
 		}
 
-		BlobReader br = this.Reader.GetBlobReader(blobHandle);
+		BlobReader br = this.WinMDReader.GetBlobReader(blobHandle);
 		var unmgdType = (UnmanagedType)br.ReadByte();
 		return unmgdType;
 	}
@@ -511,7 +511,7 @@ public partial class Generator
 		CustomAttributeHandleCollection? returnTypeAttributes = null;
 		foreach (ParameterHandle parameterHandle in methodDefinition.GetParameters())
 		{
-			Parameter parameter = this.Reader.GetParameter(parameterHandle);
+			Parameter parameter = this.WinMDReader.GetParameter(parameterHandle);
 			if (parameter.Name.IsNil)
 			{
 				returnTypeAttributes = parameter.GetCustomAttributes();
@@ -524,7 +524,7 @@ public partial class Generator
 		return returnTypeAttributes;
 	}
 
-	private bool IsUntypedDelegate(TypeDefinition typeDef) => IsUntypedDelegate(this.Reader, typeDef);
+	private bool IsUntypedDelegate(TypeDefinition typeDef) => IsUntypedDelegate(this.WinMDReader, typeDef);
 
 	private bool IsTypeDefStruct(TypeDefinition typeDef) => this.FindInteropDecorativeAttribute(typeDef.GetCustomAttributes(), NativeTypedefAttribute).HasValue || this.FindInteropDecorativeAttribute(typeDef.GetCustomAttributes(), MetadataTypedefAttribute).HasValue;
 
@@ -606,9 +606,9 @@ public partial class Generator
 				", ",
 				matchingMethodHandles.Select(h =>
 				{
-					MethodDefinition md = this.Reader.GetMethodDefinition(h);
-					TypeDefinition td = this.Reader.GetTypeDefinition(md.GetDeclaringType());
-					return $"{this.Reader.GetString(td.Namespace)}.{this.Reader.GetString(md.Name)}";
+					MethodDefinition md = this.WinMDReader.GetMethodDefinition(h);
+					TypeDefinition td = this.WinMDReader.GetTypeDefinition(md.GetDeclaringType());
+					return $"{this.WinMDReader.GetString(td.Namespace)}.{this.WinMDReader.GetString(md.Name)}";
 				}));
 			throw new ArgumentException("The method name is ambiguous. Use the fully-qualified name instead. Possible matches: " + matches);
 		}

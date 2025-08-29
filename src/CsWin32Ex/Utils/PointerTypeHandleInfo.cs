@@ -105,13 +105,13 @@ internal record PointerTypeHandleInfo(TypeHandleInfo ElementType) : TypeHandleIn
 			{
 				if (generator.TryGetTypeDefHandle((TypeReferenceHandle)handleElement.Handle, out TypeDefinitionHandle tdr))
 				{
-					typeDef = generator.Reader.GetTypeDefinition(tdr);
+					typeDef = generator.WinMDReader.GetTypeDefinition(tdr);
 					return true;
 				}
 			}
 			else if (handleElement.Handle.Kind == HandleKind.TypeDefinition)
 			{
-				typeDef = generator.Reader.GetTypeDefinition((TypeDefinitionHandle)handleElement.Handle);
+				typeDef = generator.WinMDReader.GetTypeDefinition((TypeDefinitionHandle)handleElement.Handle);
 				return true;
 			}
 		}

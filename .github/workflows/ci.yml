@@ -18,6 +18,9 @@ permissions:
   actions: read
   checks: write
 
+env:
+  SOURCE_GENERATOR_CSPROJ: '${{ github.workspace }}\src\CsWin32Ex\CsWin32Ex.csproj'
+
 jobs:
   build:
     runs-on: windows-latest
@@ -32,13 +35,28 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
 
-    - name: Build the solution
-      run: dotnet build
+    - name: Build the source generator
+      run: dotnet build $env.SOURCE_GENERATOR_CSPROJ
+
+  test:
+    needs: [build]
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout the repository
+      uses: actions/checkout@v4
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
 
     - name: Run the tests
-      run: dotnet test --no-build --logger "trx"
+      run: dotnet test --logger "trx"
 
     - name: Report the test results
+      if: always()
       uses: dorny/test-reporter@v2
       with:
         name: Test summary

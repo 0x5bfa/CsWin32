@@ -214,8 +214,8 @@ public class GeneratorManager : IGenerator, IDisposable
 			return false;
 		}
 
-		AssemblyReference assemblyRef = typeRef.Generator.Reader.GetAssemblyReference((AssemblyReferenceHandle)typeRef.Reference.ResolutionScope);
-		string scope = typeRef.Generator.Reader.GetString(assemblyRef.Name);
+		AssemblyReference assemblyRef = typeRef.Generator.WinMDReader.GetAssemblyReference((AssemblyReferenceHandle)typeRef.Reference.ResolutionScope);
+		string scope = typeRef.Generator.WinMDReader.GetString(assemblyRef.Name);
 		return this.TryGetGenerator(scope, out targetGenerator);
 	}
 
@@ -241,8 +241,8 @@ public class GeneratorManager : IGenerator, IDisposable
 		QualifiedTypeReference typeRef = typeRefHandle.Resolve();
 		if (this.TryGetTargetGenerator(typeRef, out Generator? targetGenerator))
 		{
-			string? @namespace = typeRef.Generator.Reader.GetString(typeRef.Reference.Namespace);
-			string? @name = typeRef.Generator.Reader.GetString(typeRef.Reference.Name);
+			string? @namespace = typeRef.Generator.WinMDReader.GetString(typeRef.Reference.Namespace);
+			string? @name = typeRef.Generator.WinMDReader.GetString(typeRef.Reference.Name);
 			if (targetGenerator.TryGetTypeDefHandle(@namespace, name, out TypeDefinitionHandle targetTypeDefHandle))
 			{
 				typeDefHandle = new QualifiedTypeDefinitionHandle(targetGenerator, targetTypeDefHandle);
@@ -269,8 +269,8 @@ public class GeneratorManager : IGenerator, IDisposable
 
 		if (this.TryGetTargetGenerator(typeRef, out Generator? generator))
 		{
-			string ns = typeRef.Generator.Reader.GetString(typeRef.Reference.Namespace);
-			string name = typeRef.Generator.Reader.GetString(typeRef.Reference.Name);
+			string ns = typeRef.Generator.WinMDReader.GetString(typeRef.Reference.Namespace);
+			string name = typeRef.Generator.WinMDReader.GetString(typeRef.Reference.Name);
 			generator.RequestInteropType(ns, name, context);
 			return true;
 		}

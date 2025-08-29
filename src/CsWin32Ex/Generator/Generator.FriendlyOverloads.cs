@@ -73,7 +73,7 @@ public partial class Generator
 		bool signatureChanged = false;
 		foreach (ParameterHandle paramHandle in methodDefinition.GetParameters())
 		{
-			Parameter param = this.Reader.GetParameter(paramHandle);
+			Parameter param = this.WinMDReader.GetParameter(paramHandle);
 			if (param.SequenceNumber == 0)
 			{
 				returnTypeAttributes = param.GetCustomAttributes();
@@ -145,7 +145,7 @@ public partial class Generator
 				bool hasOut = externParam.Modifiers.Any(SyntaxKind.OutKeyword);
 				arguments[param.SequenceNumber - 1] = arguments[param.SequenceNumber - 1].WithRefKindKeyword(TokenWithSpace(hasOut ? SyntaxKind.OutKeyword : SyntaxKind.RefKeyword));
 			}
-			else if (isOut && !isIn && !isReleaseMethod && parameterTypeInfo is PointerTypeHandleInfo { ElementType: HandleTypeHandleInfo pointedElementInfo } && this.TryGetHandleReleaseMethod(pointedElementInfo.Handle, paramAttributes, out string? outReleaseMethod) && !this.Reader.StringComparer.Equals(methodDefinition.Name, outReleaseMethod))
+			else if (isOut && !isIn && !isReleaseMethod && parameterTypeInfo is PointerTypeHandleInfo { ElementType: HandleTypeHandleInfo pointedElementInfo } && this.TryGetHandleReleaseMethod(pointedElementInfo.Handle, paramAttributes, out string? outReleaseMethod) && !this.WinMDReader.StringComparer.Equals(methodDefinition.Name, outReleaseMethod))
 			{
 				if (this.RequestSafeHandle(outReleaseMethod) is TypeSyntax safeHandleType)
 				{
@@ -174,7 +174,7 @@ public partial class Generator
 							Argument(LiteralExpression(doNotRelease ? SyntaxKind.FalseLiteralExpression : SyntaxKind.TrueLiteralExpression)).WithNameColon(NameColon(IdentifierName("ownsHandle")))))));
 				}
 			}
-			else if (this._options.UseSafeHandles && isIn && !isOut && !isReleaseMethod && parameterTypeInfo is HandleTypeHandleInfo parameterHandleTypeInfo && this.TryGetHandleReleaseMethod(parameterHandleTypeInfo.Handle, paramAttributes, out string? releaseMethod) && !this.Reader.StringComparer.Equals(methodDefinition.Name, releaseMethod)
+			else if (this._options.UseSafeHandles && isIn && !isOut && !isReleaseMethod && parameterTypeInfo is HandleTypeHandleInfo parameterHandleTypeInfo && this.TryGetHandleReleaseMethod(parameterHandleTypeInfo.Handle, paramAttributes, out string? releaseMethod) && !this.WinMDReader.StringComparer.Equals(methodDefinition.Name, releaseMethod)
 				&& !(this.TryGetTypeDefFieldType(parameterHandleTypeInfo, out TypeHandleInfo? fieldType) && !this.IsSafeHandleCompatibleTypeDefFieldType(fieldType)))
 			{
 				IdentifierNameSyntax typeDefHandleName = IdentifierName(externParam.Identifier.ValueText + "Local");

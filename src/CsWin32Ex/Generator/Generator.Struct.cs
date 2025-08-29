@@ -16,9 +16,9 @@ public partial class Generator
 
 	private StructDeclarationSyntax DeclareStruct(TypeDefinitionHandle typeDefHandle, Context context)
 	{
-		TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefHandle);
+		TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(typeDefHandle);
 		bool isManagedType = this.IsManagedType(typeDefHandle);
-		IdentifierNameSyntax name = IdentifierName(this.GetMangledIdentifier(this.Reader.GetString(typeDef.Name), context.AllowMarshaling, isManagedType));
+		IdentifierNameSyntax name = IdentifierName(this.GetMangledIdentifier(this.WinMDReader.GetString(typeDef.Name), context.AllowMarshaling, isManagedType));
 		bool explicitLayout = (typeDef.Attributes & TypeAttributes.ExplicitLayout) == TypeAttributes.ExplicitLayout;
 		if (explicitLayout)
 		{
@@ -31,8 +31,8 @@ public partial class Generator
 		MethodDeclarationSyntax? sizeOfMethod = null;
 		if (typeDef.GetFields().LastOrDefault() is FieldDefinitionHandle { IsNil: false } lastFieldHandle)
 		{
-			FieldDefinition lastField = this.Reader.GetFieldDefinition(lastFieldHandle);
-			if (WinMDFileHelper.TryGetAttributeOn(this.Reader, lastField.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
+			FieldDefinition lastField = this.WinMDReader.GetFieldDefinition(lastFieldHandle);
+			if (WinMDFileHelper.TryGetAttributeOn(this.WinMDReader, lastField.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
 			{
 				flexibleArrayFieldHandle = lastFieldHandle;
 				context = context with { AllowMarshaling = false };
@@ -46,7 +46,7 @@ public partial class Generator
 		SyntaxList<MemberDeclarationSyntax> additionalMembers = default;
 		foreach (FieldDefinitionHandle fieldDefHandle in typeDef.GetFields())
 		{
-			FieldDefinition fieldDef = this.Reader.GetFieldDefinition(fieldDefHandle);
+			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
 			FieldDeclarationSyntax field;
 
 			if (fieldDef.Attributes.HasFlag(FieldAttributes.Static))
@@ -63,7 +63,7 @@ public partial class Generator
 				}
 			}
 
-			string fieldName = this.Reader.GetString(fieldDef.Name);
+			string fieldName = this.WinMDReader.GetString(fieldDef.Name);
 
 			try
 			{
@@ -212,7 +212,7 @@ public partial class Generator
 
 				members.Add(field);
 
-				foreach (CustomAttribute bitfieldAttribute in WinMDFileHelper.FindAttributes(this.Reader, fieldDef.GetCustomAttributes(), InteropDecorationNamespace, NativeBitfieldAttribute))
+				foreach (CustomAttribute bitfieldAttribute in WinMDFileHelper.FindAttributes(this.WinMDReader, fieldDef.GetCustomAttributes(), InteropDecorationNamespace, NativeBitfieldAttribute))
 				{
 					var fieldTypeInfo = (PrimitiveTypeHandleInfo)fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null);
 

@@ -59,12 +59,12 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		get
 		{
-			if (this.IsWin32Sdk || this.Manager is null)
+			if (IsWin32Sdk || Manager is null)
 			{
 				return this;
 			}
 
-			if (this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
+			if (Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 			{
 				return generator;
 			}
@@ -79,9 +79,9 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal WinMDFileIndexer WinMDIndexer { get; }
 
-	internal MetadataReader Reader => _winMDReaderRental.Value;
+	internal MetadataReader WinMDReader => _winMDReaderRental.Value;
 
-	internal LanguageVersion LanguageVersion => this._parseOptions?.LanguageVersion ?? LanguageVersion.CSharp9;
+	internal LanguageVersion LanguageVersion => _parseOptions?.LanguageVersion ?? LanguageVersion.CSharp9;
 
 	/// <summary>
 	/// Gets the default generation context to use.
@@ -102,7 +102,7 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		get
 		{
-			IEnumerable<IGrouping<string, MemberDeclarationSyntax>> members = this._committedCode.MembersByModule;
+			IEnumerable<IGrouping<string, MemberDeclarationSyntax>> members = _committedCode.MembersByModule;
 			IEnumerable<MemberDeclarationSyntax> result = Enumerable.Empty<MemberDeclarationSyntax>();
 			int i = 0;
 			foreach (IGrouping<string, MemberDeclarationSyntax> entry in members)
@@ -123,30 +123,30 @@ public partial class Generator : IGenerator, IDisposable
 			}
 
 			ClassDeclarationSyntax macrosPartialClass = DeclarePInvokeClass("Macros")
-				.AddMembers(this._committedCode.Macros.ToArray())
+				.AddMembers(_committedCode.Macros.ToArray())
 				.WithLeadingTrivia(ParseLeadingTrivia(PartialPInvokeMacrosContentComment));
 			if (macrosPartialClass.Members.Count > 0)
 			{
 				result = result.Concat(new MemberDeclarationSyntax[] { macrosPartialClass });
 			}
 
-			ClassDeclarationSyntax DeclarePInvokeClass(string fileNameKey) => ClassDeclaration(Identifier(this._options.ClassName))
-				.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.StaticKeyword), TokenWithSpace(SyntaxKind.PartialKeyword))
-				.WithAdditionalAnnotations(new SyntaxAnnotation(SimpleFileNameAnnotation, $"{this._options.ClassName}.{fileNameKey}"));
+			ClassDeclarationSyntax DeclarePInvokeClass(string fileNameKey) => ClassDeclaration(Identifier(_options.ClassName))
+				.AddModifiers(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.StaticKeyword), TokenWithSpace(SyntaxKind.PartialKeyword))
+				.WithAdditionalAnnotations(new SyntaxAnnotation(SimpleFileNameAnnotation, $"{_options.ClassName}.{fileNameKey}"));
 
-			result = result.Concat(this._committedCode.GeneratedTypes);
+			result = result.Concat(_committedCode.GeneratedTypes);
 
-			ClassDeclarationSyntax inlineArrayIndexerExtensionsClass = this.DeclareInlineArrayIndexerExtensionsClass();
+			ClassDeclarationSyntax inlineArrayIndexerExtensionsClass = DeclareInlineArrayIndexerExtensionsClass();
 			if (inlineArrayIndexerExtensionsClass.Members.Count > 0)
 			{
 				result = result.Concat(new MemberDeclarationSyntax[] { inlineArrayIndexerExtensionsClass });
 			}
 
-			result = result.Concat(this._committedCode.ComInterfaceExtensions);
+			result = result.Concat(_committedCode.ComInterfaceExtensions);
 
-			if (this._committedCode.TopLevelFields.Any())
+			if (_committedCode.TopLevelFields.Any())
 			{
-				result = result.Concat(new MemberDeclarationSyntax[] { this.DeclareConstantDefiningClass() });
+				result = result.Concat(new MemberDeclarationSyntax[] { DeclareConstantDefiningClass() });
 			}
 
 			return result;
@@ -278,9 +278,7 @@ public partial class Generator : IGenerator, IDisposable
 	public static bool ContainsIllegalCharactersForAPIName(string apiName)
 	{
 		if (apiName is null)
-		{
 			throw new ArgumentNullException(nameof(apiName));
-		}
 
 		for (int i = 0; i < apiName.Length; i++)
 		{
@@ -291,9 +289,7 @@ public partial class Generator : IGenerator, IDisposable
 			allowed |= ch == '.'; // for qualified name searches
 
 			if (!allowed)
-			{
 				return true;
-			}
 		}
 
 		return false;
@@ -302,48 +298,41 @@ public partial class Generator : IGenerator, IDisposable
 	/// <inheritdoc/>
 	public void Dispose()
 	{
-		this.Dispose(true);
+		Dispose(true);
 		GC.SuppressFinalize(this);
 	}
 
 	/// <inheritdoc/>
 	public void GenerateAll(CancellationToken cancellationToken)
 	{
-		this.GenerateAllExternMethods(cancellationToken);
-
-		// Also generate all structs/enum types too, even if not referenced by a method,
-		// since some methods use `void*` types and require structs at runtime.
-		this.GenerateAllInteropTypes(cancellationToken);
-
-		this.GenerateAllConstants(cancellationToken);
-
-		this.GenerateAllMacros(cancellationToken);
+		GenerateAllExternMethods(cancellationToken);
+		GenerateAllInteropTypes(cancellationToken);
+		GenerateAllConstants(cancellationToken);
+		GenerateAllMacros(cancellationToken);
 	}
 
 	/// <inheritdoc/>
 	public bool TryGenerate(string apiNameOrModuleWildcard, out IReadOnlyCollection<string> preciseApi, CancellationToken cancellationToken)
 	{
 		if (string.IsNullOrWhiteSpace(apiNameOrModuleWildcard))
-		{
 			throw new ArgumentException("API cannot be null or empty.", nameof(apiNameOrModuleWildcard));
-		}
 
 		if (apiNameOrModuleWildcard.EndsWith(".*", StringComparison.Ordinal))
 		{
-			if (this.TryGenerateAllExternMethods(apiNameOrModuleWildcard.Substring(0, apiNameOrModuleWildcard.Length - 2), cancellationToken))
+			if (TryGenerateAllExternMethods(apiNameOrModuleWildcard[..^2], cancellationToken))
 			{
 				preciseApi = ImmutableList.Create(apiNameOrModuleWildcard);
 				return true;
 			}
 			else
 			{
-				preciseApi = ImmutableList<string>.Empty;
+				preciseApi = [];
 				return false;
 			}
 		}
 		else if (apiNameOrModuleWildcard.EndsWith("*", StringComparison.Ordinal))
 		{
-			if (this.TryGenerateConstants(apiNameOrModuleWildcard))
+			if (TryGenerateConstants(apiNameOrModuleWildcard))
 			{
 				preciseApi = ImmutableList.Create(apiNameOrModuleWildcard);
 				return true;
@@ -356,31 +345,31 @@ public partial class Generator : IGenerator, IDisposable
 		}
 		else
 		{
-			bool result = this.TryGenerateNamespace(apiNameOrModuleWildcard, out preciseApi);
+			bool result = TryGenerateNamespace(apiNameOrModuleWildcard, out preciseApi);
 			if (result || preciseApi.Count > 1)
 			{
 				return result;
 			}
 
-			result = this.TryGenerateExternMethod(apiNameOrModuleWildcard, out preciseApi);
+			result = TryGenerateExternMethod(apiNameOrModuleWildcard, out preciseApi);
 			if (result || preciseApi.Count > 1)
 			{
 				return result;
 			}
 
-			result = this.TryGenerateType(apiNameOrModuleWildcard, out preciseApi);
+			result = TryGenerateType(apiNameOrModuleWildcard, out preciseApi);
 			if (result || preciseApi.Count > 1)
 			{
 				return result;
 			}
 
-			result = this.TryGenerateConstant(apiNameOrModuleWildcard, out preciseApi);
+			result = TryGenerateConstant(apiNameOrModuleWildcard, out preciseApi);
 			if (result || preciseApi.Count > 1)
 			{
 				return result;
 			}
 
-			result = this.TryGenerateMacro(apiNameOrModuleWildcard, out preciseApi);
+			result = TryGenerateMacro(apiNameOrModuleWildcard, out preciseApi);
 			if (result || preciseApi.Count > 1)
 			{
 				return result;
@@ -390,26 +379,21 @@ public partial class Generator : IGenerator, IDisposable
 		}
 	}
 
-	/// <summary>
-	/// Generates all APIs within a given namespace, and their dependencies.
-	/// </summary>
+	/// <summary>Generates all APIs within a given namespace, and their dependencies.</summary>
 	/// <param name="namespace">The namespace to generate APIs for.</param>
 	/// <param name="preciseApi">Receives the canonical API names that <paramref name="namespace"/> matched on.</param>
 	/// <returns><see langword="true"/> if a matching namespace was found; otherwise <see langword="false"/>.</returns>
 	public bool TryGenerateNamespace(string @namespace, out IReadOnlyCollection<string> preciseApi)
 	{
 		if (@namespace is null)
-		{
 			throw new ArgumentNullException(nameof(@namespace));
-		}
 
-		NamespaceMetadata? metadata;
-		if (!this.WinMDIndexer.MetadataByNamespace.TryGetValue(@namespace, out metadata))
+		// Get the namespace metadata from the WinMD file.
+		if (!WinMDIndexer.MetadataByNamespace.TryGetValue(@namespace, out NamespaceMetadata? metadata))
 		{
-			// Fallback to case insensitive search if it looks promising to do so.
-			if (@namespace.StartsWith(this.WinMDIndexer.CommonNamespace, StringComparison.OrdinalIgnoreCase))
+			if (@namespace.StartsWith(WinMDIndexer.CommonNamespace, StringComparison.OrdinalIgnoreCase))
 			{
-				foreach (KeyValuePair<string, NamespaceMetadata> item in this.WinMDIndexer.MetadataByNamespace)
+				foreach (KeyValuePair<string, NamespaceMetadata> item in WinMDIndexer.MetadataByNamespace)
 				{
 					if (string.Equals(item.Key, @namespace, StringComparison.OrdinalIgnoreCase))
 					{
@@ -421,42 +405,34 @@ public partial class Generator : IGenerator, IDisposable
 			}
 		}
 
-		if (metadata is object)
+		if (metadata is not null)
 		{
-			this._volatileCode.GenerationTransaction(delegate
+			_volatileCode.GenerationTransaction(delegate
 			{
 				foreach (KeyValuePair<string, MethodDefinitionHandle> method in metadata.Methods)
-				{
-					this.RequestExternMethod(method.Value);
-				}
+					RequestExternMethod(method.Value);
 
 				foreach (KeyValuePair<string, TypeDefinitionHandle> type in metadata.Types)
-				{
-					this.RequestInteropType(type.Value, this.DefaultContext);
-				}
+					RequestInteropType(type.Value, DefaultContext);
 
 				foreach (KeyValuePair<string, FieldDefinitionHandle> field in metadata.Fields)
-				{
-					this.RequestConstant(field.Value);
-				}
+					RequestConstant(field.Value);
 			});
 
 			preciseApi = ImmutableList.Create(@namespace);
 			return true;
 		}
 
-		preciseApi = ImmutableList<string>.Empty;
+		preciseApi = [];
 		return false;
 	}
 
 	/// <inheritdoc/>
 	public void GenerateAllMacros(CancellationToken cancellationToken)
 	{
-		if (!this.IsWin32Sdk)
-		{
-			// We only have macros to generate for the main SDK.
+		// We only have macros to generate for the main SDK.
+		if (!IsWin32Sdk)
 			return;
-		}
 
 		foreach (KeyValuePair<string, MethodDeclarationSyntax> macro in Win32SdkMacros)
 		{
@@ -464,9 +440,9 @@ public partial class Generator : IGenerator, IDisposable
 
 			try
 			{
-				this._volatileCode.GenerationTransaction(delegate
+				_volatileCode.GenerationTransaction(delegate
 				{
-					this.RequestMacro(macro.Value);
+					RequestMacro(macro.Value);
 				});
 			}
 			catch (GenerationFailedException ex) when (IsPlatformCompatibleException(ex))
@@ -479,28 +455,24 @@ public partial class Generator : IGenerator, IDisposable
 	/// <inheritdoc/>
 	public void GenerateAllInteropTypes(CancellationToken cancellationToken)
 	{
-		foreach (TypeDefinitionHandle typeDefinitionHandle in this.Reader.TypeDefinitions)
+		foreach (TypeDefinitionHandle typeDefinitionHandle in WinMDReader.TypeDefinitions)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefinitionHandle);
+			TypeDefinition typeDef = WinMDReader.GetTypeDefinition(typeDefinitionHandle);
 			if (typeDef.BaseType.IsNil && (typeDef.Attributes & TypeAttributes.Interface) != TypeAttributes.Interface)
-			{
 				continue;
-			}
 
-			if (this.Reader.StringComparer.Equals(typeDef.Namespace, InteropDecorationNamespace))
-			{
-				// Ignore the attributes that describe the metadata.
+			// Ignore the attributes that describe the metadata.
+			if (WinMDReader.StringComparer.Equals(typeDef.Namespace, InteropDecorationNamespace))
 				continue;
-			}
 
-			if (this.IsCompatibleWithPlatform(typeDef.GetCustomAttributes()))
+			if (IsCompatibleWithPlatform(typeDef.GetCustomAttributes()))
 			{
 				try
 				{
-					this._volatileCode.GenerationTransaction(delegate
+					_volatileCode.GenerationTransaction(delegate
 					{
-						this.RequestInteropType(typeDefinitionHandle, this.DefaultContext);
+						RequestInteropType(typeDefinitionHandle, DefaultContext);
 					});
 				}
 				catch (GenerationFailedException ex) when (IsPlatformCompatibleException(ex))
@@ -515,36 +487,30 @@ public partial class Generator : IGenerator, IDisposable
 	public bool TryGenerateType(string possiblyQualifiedName, out IReadOnlyCollection<string> preciseApi)
 	{
 		if (possiblyQualifiedName is null)
-		{
 			throw new ArgumentNullException(nameof(possiblyQualifiedName));
-		}
 
 		TrySplitPossiblyQualifiedName(possiblyQualifiedName, out string? typeNamespace, out string typeName);
-		var matchingTypeHandles = new List<TypeDefinitionHandle>();
-		IEnumerable<NamespaceMetadata>? namespaces = this.GetNamespacesToSearch(typeNamespace);
+		IEnumerable<NamespaceMetadata>? namespaces = GetNamespacesToSearch(typeNamespace);
 		bool foundApiWithMismatchedPlatform = false;
 
+		List<TypeDefinitionHandle> matchingTypeHandles = [];
 		foreach (NamespaceMetadata? nsMetadata in namespaces)
 		{
 			if (nsMetadata.Types.TryGetValue(typeName, out TypeDefinitionHandle handle))
-			{
 				matchingTypeHandles.Add(handle);
-			}
 			else if (nsMetadata.TypesForOtherPlatform.Contains(typeName))
-			{
 				foundApiWithMismatchedPlatform = true;
-			}
 		}
 
-		if (matchingTypeHandles.Count == 1)
+		if (matchingTypeHandles.Count is 1)
 		{
-			this._volatileCode.GenerationTransaction(delegate
+			_volatileCode.GenerationTransaction(delegate
 			{
-				this.RequestInteropType(matchingTypeHandles[0], this.DefaultContext);
+				RequestInteropType(matchingTypeHandles[0], DefaultContext);
 			});
 
-			TypeDefinition td = this.Reader.GetTypeDefinition(matchingTypeHandles[0]);
-			preciseApi = ImmutableList.Create($"{this.Reader.GetString(td.Namespace)}.{this.Reader.GetString(td.Name)}");
+			TypeDefinition typeDefinition = WinMDReader.GetTypeDefinition(matchingTypeHandles[0]);
+			preciseApi = ImmutableList.Create($"{WinMDReader.GetString(typeDefinition.Namespace)}.{WinMDReader.GetString(typeDefinition.Name)}");
 			return true;
 		}
 		else if (matchingTypeHandles.Count > 1)
@@ -552,26 +518,24 @@ public partial class Generator : IGenerator, IDisposable
 			preciseApi = ImmutableList.CreateRange(
 				matchingTypeHandles.Select(h =>
 				{
-					TypeDefinition td = this.Reader.GetTypeDefinition(h);
-					return $"{this.Reader.GetString(td.Namespace)}.{this.Reader.GetString(td.Name)}";
+					TypeDefinition td = WinMDReader.GetTypeDefinition(h);
+					return $"{WinMDReader.GetString(td.Namespace)}.{WinMDReader.GetString(td.Name)}";
 				}));
 			return false;
 		}
 
-		if (this.InputAssemblyName.Equals("Windows.Win32", StringComparison.OrdinalIgnoreCase) && SpecialTypeDefNames.Contains(typeName))
+		if (InputAssemblyName.Equals("Windows.Win32", StringComparison.OrdinalIgnoreCase) && SpecialTypeDefNames.Contains(typeName))
 		{
 			string? fullyQualifiedName = null;
-			this._volatileCode.GenerationTransaction(() => this.RequestSpecialTypeDefStruct(typeName, out fullyQualifiedName));
+			_volatileCode.GenerationTransaction(() => RequestSpecialTypeDefStruct(typeName, out fullyQualifiedName));
 			preciseApi = ImmutableList.Create(fullyQualifiedName!);
 			return true;
 		}
 
 		if (foundApiWithMismatchedPlatform)
-		{
-			throw new PlatformIncompatibleException($"The requested API ({possiblyQualifiedName}) was found but is not available given the target platform ({this._compilation?.Options.Platform}).");
-		}
+			throw new PlatformIncompatibleException($"The requested API ({possiblyQualifiedName}) was found but is not available given the target platform ({_compilation?.Options.Platform}).");
 
-		preciseApi = ImmutableList<string>.Empty;
+		preciseApi = [];
 		return false;
 	}
 
@@ -584,19 +548,17 @@ public partial class Generator : IGenerator, IDisposable
 	public bool TryGenerateMacro(string macroName, out IReadOnlyCollection<string> preciseApi)
 	{
 		if (macroName is null)
-		{
 			throw new ArgumentNullException(nameof(macroName));
-		}
 
-		if (!this.IsWin32Sdk || !Win32SdkMacros.TryGetValue(macroName, out MethodDeclarationSyntax macro))
+		if (!IsWin32Sdk || !Win32SdkMacros.TryGetValue(macroName, out MethodDeclarationSyntax macro))
 		{
-			preciseApi = Array.Empty<string>();
+			preciseApi = [];
 			return false;
 		}
 
-		this._volatileCode.GenerationTransaction(delegate
+		_volatileCode.GenerationTransaction(delegate
 		{
-			this.RequestMacro(macro);
+			RequestMacro(macro);
 		});
 
 		preciseApi = ImmutableList.Create(macroName);
@@ -607,30 +569,24 @@ public partial class Generator : IGenerator, IDisposable
 	public IReadOnlyList<string> GetSuggestions(string name)
 	{
 		if (name is null)
-		{
 			throw new ArgumentNullException(nameof(name));
-		}
 
 		// Trim suffixes off the name.
 		var suffixes = new List<string> { "A", "W", "32", "64", "Ex" };
 		foreach (string suffix in suffixes)
 		{
 			if (name.EndsWith(suffix, StringComparison.Ordinal))
-			{
-				name = name.Substring(0, name.Length - suffix.Length);
-			}
+				name = name[..^suffix.Length];
 		}
 
 		// We should match on any API for which the given string is a substring.
-		List<string> suggestions = new();
-		foreach (NamespaceMetadata nsMetadata in this.WinMDIndexer.MetadataByNamespace.Values)
+		List<string> suggestions = [];
+		foreach (NamespaceMetadata nsMetadata in WinMDIndexer.MetadataByNamespace.Values)
 		{
 			foreach (string candidate in nsMetadata.Fields.Keys.Concat(nsMetadata.Types.Keys).Concat(nsMetadata.Methods.Keys))
 			{
 				if (candidate.Contains(name))
-				{
 					suggestions.Add(candidate);
-				}
 			}
 		}
 
@@ -640,12 +596,10 @@ public partial class Generator : IGenerator, IDisposable
 	/// <inheritdoc/>
 	public IEnumerable<KeyValuePair<string, CompilationUnitSyntax>> GetCompilationUnits(CancellationToken cancellationToken)
 	{
-		if (this._committedCode.IsEmpty)
-		{
+		if (_committedCode.IsEmpty)
 			return ImmutableDictionary<string, CompilationUnitSyntax>.Empty;
-		}
 
-		NamespaceDeclarationSyntax? starterNamespace = NamespaceDeclaration(ParseName(this.Namespace));
+		NamespaceDeclarationSyntax? starterNamespace = NamespaceDeclaration(ParseName(Namespace));
 
 		// .g.cs because the resulting files are not user-created.
 		const string FilenamePattern = "{0}.g.cs";
@@ -661,18 +615,18 @@ public partial class Generator : IGenerator, IDisposable
 						: nsContents.ToArray());
 		}
 
-		if (this._options.EmitSingleFile)
+		if (_options.EmitSingleFile)
 		{
 			CompilationUnitSyntax file = CompilationUnit()
-				.AddMembers(starterNamespace.AddMembers(GroupMembersByNamespace(this.NamespaceMembers).ToArray()))
-				.AddMembers(this._committedCode.GeneratedTopLevelTypes.ToArray());
+				.AddMembers(starterNamespace.AddMembers(GroupMembersByNamespace(NamespaceMembers).ToArray()))
+				.AddMembers(_committedCode.GeneratedTopLevelTypes.ToArray());
 			results.Add(
 				string.Format(CultureInfo.InvariantCulture, FilenamePattern, "NativeMethods"),
 				file);
 		}
 		else
 		{
-			foreach (MemberDeclarationSyntax topLevelType in this._committedCode.GeneratedTopLevelTypes)
+			foreach (MemberDeclarationSyntax topLevelType in _committedCode.GeneratedTopLevelTypes)
 			{
 				string typeName = topLevelType.DescendantNodesAndSelf().OfType<BaseTypeDeclarationSyntax>().First().Identifier.ValueText;
 				results.Add(
@@ -680,7 +634,7 @@ public partial class Generator : IGenerator, IDisposable
 					CompilationUnit().AddMembers(topLevelType));
 			}
 
-			IEnumerable<IGrouping<string?, MemberDeclarationSyntax>>? membersByFile = this.NamespaceMembers.GroupBy(
+			IEnumerable<IGrouping<string?, MemberDeclarationSyntax>>? membersByFile = NamespaceMembers.GroupBy(
 				member => member.HasAnnotations(SimpleFileNameAnnotation)
 						? member.GetAnnotations(SimpleFileNameAnnotation).Single().Data
 						: member switch
@@ -720,12 +674,12 @@ public partial class Generator : IGenerator, IDisposable
 			UsingDirective(ParseName(GlobalNamespacePrefix + SystemRuntimeInteropServices)),
 		};
 
-		if (this._generateSupportedOSPlatformAttributes)
+		if (_generateSupportedOSPlatformAttributes)
 		{
 			usingDirectives.Add(UsingDirective(ParseName(GlobalNamespacePrefix + "System.Runtime.Versioning")));
 		}
 
-		usingDirectives.Add(UsingDirective(NameEquals(GlobalWinmdRootNamespaceAlias), ParseName(GlobalNamespacePrefix + this.WinMDIndexer.CommonNamespace)));
+		usingDirectives.Add(UsingDirective(NameEquals(GlobalWinmdRootNamespaceAlias), ParseName(GlobalNamespacePrefix + WinMDIndexer.CommonNamespace)));
 
 		var normalizedResults = new Dictionary<string, CompilationUnitSyntax>(StringComparer.OrdinalIgnoreCase);
 		results.AsParallel().WithCancellation(cancellationToken).ForAll(kv =>
@@ -741,9 +695,9 @@ public partial class Generator : IGenerator, IDisposable
 			}
 		});
 
-		if (this._compilation?.GetTypeByMetadataName("System.Reflection.AssemblyMetadataAttribute") is not null)
+		if (_compilation?.GetTypeByMetadataName("System.Reflection.AssemblyMetadataAttribute") is not null)
 		{
-			if (this._options.EmitSingleFile)
+			if (_options.EmitSingleFile)
 			{
 				KeyValuePair<string, CompilationUnitSyntax> originalEntry = normalizedResults.Single();
 				normalizedResults[originalEntry.Key] = originalEntry.Value.WithLeadingTrivia().AddAttributeLists(CsWin32StampAttribute).WithLeadingTrivia(originalEntry.Value.GetLeadingTrivia());
@@ -754,16 +708,16 @@ public partial class Generator : IGenerator, IDisposable
 			}
 		}
 
-		if (this._committedCode.NeedsWinRTCustomMarshaler)
+		if (_committedCode.NeedsWinRTCustomMarshaler)
 		{
 			string? marshalerText = FetchTemplateText(WinRTCustomMarshalerClass);
-			if (marshalerText == null)
+			if (marshalerText is null)
 			{
 				throw new GenerationFailedException($"Failed to get template for \"{WinRTCustomMarshalerClass}\".");
 			}
 
 			SyntaxTree? marshalerContents = SyntaxFactory.ParseSyntaxTree(marshalerText, cancellationToken: cancellationToken);
-			if (marshalerContents == null)
+			if (marshalerContents is null)
 			{
 				throw new GenerationFailedException($"Failed adding \"{WinRTCustomMarshalerClass}\".");
 			}
@@ -789,47 +743,45 @@ public partial class Generator : IGenerator, IDisposable
 	internal static bool IsPlatformCompatibleException(Exception? ex)
 	{
 		if (ex is null)
-		{
 			return false;
-		}
 
 		return ex is PlatformIncompatibleException || IsPlatformCompatibleException(ex?.InnerException);
 	}
 
 	internal static string ReplaceCommonNamespaceWithAlias(Generator? generator, string fullNamespace)
 	{
-		return generator is object && generator.TryStripCommonNamespace(fullNamespace, out string? stripped) ? (stripped.Length > 0 ? $"{GlobalWinmdRootNamespaceAlias}.{stripped}" : GlobalWinmdRootNamespaceAlias) : $"global::{fullNamespace}";
+		return generator is not null && generator.TryStripCommonNamespace(fullNamespace, out string? stripped) ? (stripped.Length > 0 ? $"{GlobalWinmdRootNamespaceAlias}.{stripped}" : GlobalWinmdRootNamespaceAlias) : $"global::{fullNamespace}";
 	}
 
 	internal void RequestComHelpers(Context context)
 	{
-		if (this.IsWin32Sdk)
+		if (IsWin32Sdk)
 		{
-			if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{this._comHelperClass.Identifier.ValueText}"))
+			if (!IsTypeAlreadyFullyDeclared($"{Namespace}.{_comHelperClass.Identifier.ValueText}"))
 			{
-				this.RequestInteropType("Windows.Win32.Foundation", "HRESULT", context);
-				this._volatileCode.GenerateSpecialType("ComHelpers", () => this._volatileCode.AddSpecialType("ComHelpers", this._comHelperClass));
+				RequestInteropType("Windows.Win32.Foundation", "HRESULT", context);
+				_volatileCode.GenerateSpecialType("ComHelpers", () => _volatileCode.AddSpecialType("ComHelpers", _comHelperClass));
 			}
 
-			if (this.IsFeatureAvailable(Feature.InterfaceStaticMembers) && !context.AllowMarshaling)
+			if (IsFeatureAvailable(Feature.InterfaceStaticMembers) && !context.AllowMarshaling)
 			{
-				if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{IVTableInterface.Identifier.ValueText}"))
+				if (!IsTypeAlreadyFullyDeclared($"{Namespace}.{IVTableInterface.Identifier.ValueText}"))
 				{
-					this._volatileCode.GenerateSpecialType("IVTable", () => this._volatileCode.AddSpecialType("IVTable", IVTableInterface));
+					_volatileCode.GenerateSpecialType("IVTable", () => _volatileCode.AddSpecialType("IVTable", IVTableInterface));
 				}
 
-				if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{IVTableGenericInterface.Identifier.ValueText}`2"))
+				if (!IsTypeAlreadyFullyDeclared($"{Namespace}.{IVTableGenericInterface.Identifier.ValueText}`2"))
 				{
-					this._volatileCode.GenerateSpecialType("IVTable`2", () => this._volatileCode.AddSpecialType("IVTable`2", IVTableGenericInterface));
+					_volatileCode.GenerateSpecialType("IVTable`2", () => _volatileCode.AddSpecialType("IVTable`2", IVTableGenericInterface));
 				}
 
-				if (!this.TryGenerate("IUnknown", out _, default))
+				if (!TryGenerate("IUnknown", out _, default))
 				{
 					throw new GenerationFailedException("Unable to generate IUnknown.");
 				}
 			}
 		}
-		else if (this.Manager is not null && this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
+		else if (Manager is not null && Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 		{
 			generator.RequestComHelpers(context);
 		}
@@ -837,12 +789,12 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal bool TryStripCommonNamespace(string fullNamespace, [NotNullWhen(true)] out string? strippedNamespace)
 	{
-		if (fullNamespace.StartsWith(this.WinMDIndexer.CommonNamespaceWithDot, StringComparison.Ordinal))
+		if (fullNamespace.StartsWith(WinMDIndexer.CommonNamespaceWithDot, StringComparison.Ordinal))
 		{
-			strippedNamespace = fullNamespace.Substring(this.WinMDIndexer.CommonNamespaceWithDot.Length);
+			strippedNamespace = fullNamespace.Substring(WinMDIndexer.CommonNamespaceWithDot.Length);
 			return true;
 		}
-		else if (fullNamespace == this.WinMDIndexer.CommonNamespace)
+		else if (fullNamespace == WinMDIndexer.CommonNamespace)
 		{
 			strippedNamespace = string.Empty;
 			return true;
@@ -855,53 +807,53 @@ public partial class Generator : IGenerator, IDisposable
 	internal void RequestInteropType(string @namespace, string name, Context context)
 	{
 		// PERF: Skip this search if this namespace/name has already been generated (committed, or still in volatileCode).
-		foreach (TypeDefinitionHandle tdh in this.Reader.TypeDefinitions)
+		foreach (TypeDefinitionHandle tdh in WinMDReader.TypeDefinitions)
 		{
-			TypeDefinition td = this.Reader.GetTypeDefinition(tdh);
-			if (this.Reader.StringComparer.Equals(td.Name, name) && this.Reader.StringComparer.Equals(td.Namespace, @namespace))
+			TypeDefinition td = WinMDReader.GetTypeDefinition(tdh);
+			if (WinMDReader.StringComparer.Equals(td.Name, name) && WinMDReader.StringComparer.Equals(td.Namespace, @namespace))
 			{
-				this._volatileCode.GenerationTransaction(delegate
+				_volatileCode.GenerationTransaction(delegate
 				{
-					this.RequestInteropType(tdh, context);
+					RequestInteropType(tdh, context);
 				});
 
 				return;
 			}
 		}
 
-		throw new GenerationFailedException($"Referenced type \"{@namespace}.{name}\" not found in \"{this.InputAssemblyName}\".");
+		throw new GenerationFailedException($"Referenced type \"{@namespace}.{name}\" not found in \"{InputAssemblyName}\".");
 	}
 
 	internal void RequestInteropType(TypeDefinitionHandle typeDefHandle, Context context)
 	{
-		TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefHandle);
+		TypeDefinition typeDef = WinMDReader.GetTypeDefinition(typeDefHandle);
 		if (typeDef.GetDeclaringType() is { IsNil: false } nestingParentHandle)
 		{
 			// We should only generate this type into its parent type.
-			this.RequestInteropType(nestingParentHandle, context);
+			RequestInteropType(nestingParentHandle, context);
 			return;
 		}
 
-		string ns = this.Reader.GetString(typeDef.Namespace);
-		if (!this.IsCompatibleWithPlatform(typeDef.GetCustomAttributes()))
+		string ns = WinMDReader.GetString(typeDef.Namespace);
+		if (!IsCompatibleWithPlatform(typeDef.GetCustomAttributes()))
 		{
 			// We've been asked for an interop type that does not apply. This happens because the metadata
 			// may use a TypeReferenceHandle or TypeDefinitionHandle to just one of many arch-specific definitions of this type.
 			// Try to find the appropriate definition for our target architecture.
-			string name = this.Reader.GetString(typeDef.Name);
-			NamespaceMetadata namespaceMetadata = this.WinMDIndexer.MetadataByNamespace[ns];
+			string name = WinMDReader.GetString(typeDef.Name);
+			NamespaceMetadata namespaceMetadata = WinMDIndexer.MetadataByNamespace[ns];
 			if (!namespaceMetadata.Types.TryGetValue(name, out typeDefHandle) && namespaceMetadata.TypesForOtherPlatform.Contains(name))
 			{
 				throw new PlatformIncompatibleException($"Request for type ({ns}.{name}) that is not available given the target platform.");
 			}
 		}
 
-		bool hasUnmanagedName = this.HasUnmanagedSuffix(this.Reader, typeDef.Name, context.AllowMarshaling, this.IsManagedType(typeDefHandle));
-		this._volatileCode.GenerateType(typeDefHandle, hasUnmanagedName, delegate
+		bool hasUnmanagedName = HasUnmanagedSuffix(WinMDReader, typeDef.Name, context.AllowMarshaling, IsManagedType(typeDefHandle));
+		_volatileCode.GenerateType(typeDefHandle, hasUnmanagedName, delegate
 		{
-			if (this.RequestInteropTypeHelper(typeDefHandle, context) is MemberDeclarationSyntax typeDeclaration)
+			if (RequestInteropTypeHelper(typeDefHandle, context) is MemberDeclarationSyntax typeDeclaration)
 			{
-				if (!this.TryStripCommonNamespace(ns, out string? shortNamespace))
+				if (!TryStripCommonNamespace(ns, out string? shortNamespace))
 				{
 					throw new GenerationFailedException("Unexpected namespace: " + ns);
 				}
@@ -912,31 +864,31 @@ public partial class Generator : IGenerator, IDisposable
 						new SyntaxAnnotation(NamespaceContainerAnnotation, shortNamespace));
 				}
 
-				this._volatileCode.AddInteropType(typeDefHandle, hasUnmanagedName, typeDeclaration);
+				_volatileCode.AddInteropType(typeDefHandle, hasUnmanagedName, typeDeclaration);
 			}
 		});
 	}
 
 	internal void RequestInteropType(TypeReferenceHandle typeRefHandle, Context context)
 	{
-		if (this.TryGetTypeDefHandle(typeRefHandle, out TypeDefinitionHandle typeDefHandle))
+		if (TryGetTypeDefHandle(typeRefHandle, out TypeDefinitionHandle typeDefHandle))
 		{
-			this.RequestInteropType(typeDefHandle, context);
+			RequestInteropType(typeDefHandle, context);
 		}
 		else
 		{
-			TypeReference typeRef = this.Reader.GetTypeReference(typeRefHandle);
+			TypeReference typeRef = WinMDReader.GetTypeReference(typeRefHandle);
 			if (typeRef.ResolutionScope.Kind == HandleKind.AssemblyReference)
 			{
-				if (this.Manager?.TryRequestInteropType(new(this, typeRef), context) is not true)
+				if (Manager?.TryRequestInteropType(new(this, typeRef), context) is not true)
 				{
 					// We can't find the interop among our metadata inputs.
 					// Before we give up and report an error, search for the required type among the compilation's referenced assemblies.
-					string metadataName = $"{this.Reader.GetString(typeRef.Namespace)}.{this.Reader.GetString(typeRef.Name)}";
-					if (this._compilation?.GetTypeByMetadataName(metadataName) is null)
+					string metadataName = $"{WinMDReader.GetString(typeRef.Namespace)}.{WinMDReader.GetString(typeRef.Name)}";
+					if (_compilation?.GetTypeByMetadataName(metadataName) is null)
 					{
-						AssemblyReference assemblyRef = this.Reader.GetAssemblyReference((AssemblyReferenceHandle)typeRef.ResolutionScope);
-						string scope = this.Reader.GetString(assemblyRef.Name);
+						AssemblyReference assemblyRef = WinMDReader.GetAssemblyReference((AssemblyReferenceHandle)typeRef.ResolutionScope);
+						string scope = WinMDReader.GetString(assemblyRef.Name);
 						throw new GenerationFailedException($"Input metadata _memoryMappedFile \"{scope}\" has not been provided, or is referenced at a version that is lacking the type \"{metadataName}\".");
 					}
 				}
@@ -946,9 +898,9 @@ public partial class Generator : IGenerator, IDisposable
 
 	internal void RequestMacro(MethodDeclarationSyntax macro)
 	{
-		this._volatileCode.GenerateMacro(macro.Identifier.ValueText, delegate
+		_volatileCode.GenerateMacro(macro.Identifier.ValueText, delegate
 		{
-			this._volatileCode.AddMacro(macro.Identifier.ValueText, (MethodDeclarationSyntax)this.ElevateVisibility(macro));
+			_volatileCode.AddMacro(macro.Identifier.ValueText, (MethodDeclarationSyntax)ElevateVisibility(macro));
 
 			// Generate any additional types that this macro relies on.
 			foreach (QualifiedNameSyntax identifier in macro.DescendantNodes().OfType<QualifiedNameSyntax>())
@@ -956,7 +908,7 @@ public partial class Generator : IGenerator, IDisposable
 				string identifierString = identifier.ToString();
 				if (identifierString.StartsWith(GlobalNamespacePrefix, StringComparison.Ordinal))
 				{
-					this.TryGenerateType(identifierString.Substring(GlobalNamespacePrefix.Length), out _);
+					TryGenerateType(identifierString.Substring(GlobalNamespacePrefix.Length), out _);
 				}
 			}
 
@@ -966,7 +918,7 @@ public partial class Generator : IGenerator, IDisposable
 				string identifierString = identifier.ToString();
 				if (Win32SdkMacros.ContainsKey(identifierString))
 				{
-					this.TryGenerateMacro(identifierString, out _);
+					TryGenerateMacro(identifierString, out _);
 				}
 			}
 		});
@@ -984,12 +936,12 @@ public partial class Generator : IGenerator, IDisposable
 			switch (typeDef.BaseType.Kind)
 			{
 				case HandleKind.TypeReference:
-					TypeReference baseTypeRef = this.Reader.GetTypeReference((TypeReferenceHandle)typeDef.BaseType);
+					TypeReference baseTypeRef = WinMDReader.GetTypeReference((TypeReferenceHandle)typeDef.BaseType);
 					baseTypeName = baseTypeRef.Name;
 					baseTypeNamespace = baseTypeRef.Namespace;
 					break;
 				case HandleKind.TypeDefinition:
-					TypeDefinition baseTypeDef = this.Reader.GetTypeDefinition((TypeDefinitionHandle)typeDef.BaseType);
+					TypeDefinition baseTypeDef = WinMDReader.GetTypeDefinition((TypeDefinitionHandle)typeDef.BaseType);
 					baseTypeName = baseTypeDef.Name;
 					baseTypeNamespace = baseTypeDef.Namespace;
 					break;
@@ -1002,19 +954,19 @@ public partial class Generator : IGenerator, IDisposable
 	internal MemberDeclarationSyntax? RequestSpecialTypeDefStruct(string specialName, out string fullyQualifiedName)
 	{
 		string subNamespace = "Foundation";
-		string ns = $"{this.Namespace}.{subNamespace}";
+		string ns = $"{Namespace}.{subNamespace}";
 		fullyQualifiedName = $"{ns}.{specialName}";
 
-		if (this.IsTypeAlreadyFullyDeclared(fullyQualifiedName))
+		if (IsTypeAlreadyFullyDeclared(fullyQualifiedName))
 		{
 			// The type already exists either in this project or a referenced one.
 			return null;
 		}
 
 		MemberDeclarationSyntax? specialDeclaration = null;
-		if (this.InputAssemblyName.Equals("Windows.Win32", StringComparison.OrdinalIgnoreCase))
+		if (InputAssemblyName.Equals("Windows.Win32", StringComparison.OrdinalIgnoreCase))
 		{
-			this._volatileCode.GenerateSpecialType(specialName, delegate
+			_volatileCode.GenerateSpecialType(specialName, delegate
 			{
 				switch (specialName)
 				{
@@ -1024,14 +976,14 @@ public partial class Generator : IGenerator, IDisposable
 					case "PCZZWSTR":
 					case "PZZSTR":
 					case "PZZWSTR":
-						specialDeclaration = this.FetchTemplate($"{specialName}");
+						specialDeclaration = FetchTemplate($"{specialName}");
 						if (!specialName.StartsWith("PC", StringComparison.Ordinal))
 						{
-							this.TryGenerateType("Windows.Win32.Foundation.PC" + specialName.Substring(1), out _); // the template references its constant version
+							TryGenerateType("Windows.Win32.Foundation.PC" + specialName.Substring(1), out _); // the template references its constant version
 						}
 						else if (specialName.StartsWith("PCZZ", StringComparison.Ordinal))
 						{
-							this.TryGenerateType("Windows.Win32.Foundation.PC" + specialName.Substring(4), out _); // the template references its single string version
+							TryGenerateType("Windows.Win32.Foundation.PC" + specialName.Substring(4), out _); // the template references its single string version
 						}
 
 						break;
@@ -1046,10 +998,10 @@ public partial class Generator : IGenerator, IDisposable
 
 				specialDeclaration = specialDeclaration.WithAdditionalAnnotations(new SyntaxAnnotation(NamespaceContainerAnnotation, subNamespace));
 
-				this._volatileCode.AddSpecialType(specialName, specialDeclaration);
+				_volatileCode.AddSpecialType(specialName, specialDeclaration);
 			});
 		}
-		else if (this.Manager?.TryGetGenerator("Windows.Win32", out Generator? win32Generator) is true)
+		else if (Manager?.TryGetGenerator("Windows.Win32", out Generator? win32Generator) is true)
 		{
 			string? fullyQualifiedNameLocal = null!;
 			win32Generator._volatileCode.GenerationTransaction(delegate
@@ -1062,12 +1014,12 @@ public partial class Generator : IGenerator, IDisposable
 		return specialDeclaration;
 	}
 
-	internal bool HasUnmanagedSuffix(string originalName, bool allowMarshaling, bool isManagedType) => !allowMarshaling && isManagedType && this._options.AllowMarshaling && originalName is not "IUnknown";
+	internal bool HasUnmanagedSuffix(string originalName, bool allowMarshaling, bool isManagedType) => !allowMarshaling && isManagedType && _options.AllowMarshaling && originalName is not "IUnknown";
 
-	internal bool HasUnmanagedSuffix(MetadataReader reader, StringHandle typeName, bool allowMarshaling, bool isManagedType) => !allowMarshaling && isManagedType && this._options.AllowMarshaling && !reader.StringComparer.Equals(typeName, "IUnknown");
+	internal bool HasUnmanagedSuffix(MetadataReader reader, StringHandle typeName, bool allowMarshaling, bool isManagedType) => !allowMarshaling && isManagedType && _options.AllowMarshaling && !reader.StringComparer.Equals(typeName, "IUnknown");
 
 	internal string GetMangledIdentifier(string normalIdentifier, bool allowMarshaling, bool isManagedType) =>
-		this.HasUnmanagedSuffix(normalIdentifier, allowMarshaling, isManagedType) ? normalIdentifier + UnmanagedInteropSuffix : normalIdentifier;
+		HasUnmanagedSuffix(normalIdentifier, allowMarshaling, isManagedType) ? normalIdentifier + UnmanagedInteropSuffix : normalIdentifier;
 
 	/// <summary>
 	/// Disposes of managed and unmanaged resources.
@@ -1077,7 +1029,7 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		if (disposing)
 		{
-			this._winMDReaderRental.Dispose();
+			_winMDReaderRental.Dispose();
 		}
 	}
 
@@ -1117,10 +1069,10 @@ public partial class Generator : IGenerator, IDisposable
 
 	private bool TryGetRenamedMethod(string methodName, [NotNullWhen(true)] out string? newName)
 	{
-		if (this.WideCharOnly && IsWideFunction(methodName))
+		if (WideCharOnly && IsWideFunction(methodName))
 		{
 			newName = methodName.Substring(0, methodName.Length - 1);
-			return !this.GetMethodByName(newName, exactNameMatchOnly: true).HasValue;
+			return !GetMethodByName(newName, exactNameMatchOnly: true).HasValue;
 		}
 
 		newName = null;
@@ -1138,21 +1090,21 @@ public partial class Generator : IGenerator, IDisposable
 	/// But if we have more than one match, the compiler won't be able to resolve our type references.
 	/// In such a case, we'll prefer to just declare our own local symbol.
 	/// </remarks>
-	private bool IsTypeAlreadyFullyDeclared(string fullyQualifiedMetadataName) => this.FindTypeSymbolsIfAlreadyAvailable(fullyQualifiedMetadataName).Count == 1;
+	private bool IsTypeAlreadyFullyDeclared(string fullyQualifiedMetadataName) => FindTypeSymbolsIfAlreadyAvailable(fullyQualifiedMetadataName).Count == 1;
 
-	private ISymbol? FindTypeSymbolIfAlreadyAvailable(string fullyQualifiedMetadataName) => this.FindTypeSymbolsIfAlreadyAvailable(fullyQualifiedMetadataName).FirstOrDefault();
+	private ISymbol? FindTypeSymbolIfAlreadyAvailable(string fullyQualifiedMetadataName) => FindTypeSymbolsIfAlreadyAvailable(fullyQualifiedMetadataName).FirstOrDefault();
 
 	private IReadOnlyList<ISymbol> FindTypeSymbolsIfAlreadyAvailable(string fullyQualifiedMetadataName)
 	{
-		if (this._findTypeSymbolIfAlreadyAvailableCache.TryGetValue(fullyQualifiedMetadataName, out IReadOnlyList<ISymbol>? result))
+		if (_findTypeSymbolIfAlreadyAvailableCache.TryGetValue(fullyQualifiedMetadataName, out IReadOnlyList<ISymbol>? result))
 		{
 			return result;
 		}
 
 		List<ISymbol>? results = null;
-		if (this._compilation is object)
+		if (_compilation is object)
 		{
-			if (this._compilation.Assembly.GetTypeByMetadataName(fullyQualifiedMetadataName) is { } ownSymbol)
+			if (_compilation.Assembly.GetTypeByMetadataName(fullyQualifiedMetadataName) is { } ownSymbol)
 			{
 				// This assembly defines it.
 				// But if it defines it as a partial, we should not consider it as fully defined so we populate our side.
@@ -1163,7 +1115,7 @@ public partial class Generator : IGenerator, IDisposable
 				}
 			}
 
-			foreach (MetadataReference? reference in this._compilation.References)
+			foreach (MetadataReference? reference in _compilation.References)
 			{
 				if (!reference.Properties.Aliases.IsEmpty)
 				{
@@ -1171,11 +1123,11 @@ public partial class Generator : IGenerator, IDisposable
 					continue;
 				}
 
-				if (this._compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol referencedAssembly)
+				if (_compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol referencedAssembly)
 				{
 					if (referencedAssembly.GetTypeByMetadataName(fullyQualifiedMetadataName) is { } externalSymbol)
 					{
-						if (this._compilation.IsSymbolAccessibleWithin(externalSymbol, this._compilation.Assembly))
+						if (_compilation.IsSymbolAccessibleWithin(externalSymbol, _compilation.Assembly))
 						{
 							// A referenced assembly declares this symbol and it is accessible to our own.
 							results ??= new();
@@ -1187,13 +1139,13 @@ public partial class Generator : IGenerator, IDisposable
 		}
 
 		result = (IReadOnlyList<ISymbol>?)results ?? Array.Empty<ISymbol>();
-		this._findTypeSymbolIfAlreadyAvailableCache.Add(fullyQualifiedMetadataName, result);
+		_findTypeSymbolIfAlreadyAvailableCache.Add(fullyQualifiedMetadataName, result);
 		return result;
 	}
 
 	private ISymbol? FindExtensionMethodIfAlreadyAvailable(string fullyQualifiedTypeMetadataName, string methodName)
 	{
-		foreach (INamedTypeSymbol typeSymbol in this.FindTypeSymbolsIfAlreadyAvailable(fullyQualifiedTypeMetadataName).OfType<INamedTypeSymbol>())
+		foreach (INamedTypeSymbol typeSymbol in FindTypeSymbolsIfAlreadyAvailable(fullyQualifiedTypeMetadataName).OfType<INamedTypeSymbol>())
 		{
 			if (typeSymbol.GetMembers(methodName) is { Length: > 0 } members)
 			{
@@ -1206,22 +1158,22 @@ public partial class Generator : IGenerator, IDisposable
 
 	private MemberDeclarationSyntax? RequestInteropTypeHelper(TypeDefinitionHandle typeDefHandle, Context context)
 	{
-		TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefHandle);
-		if (this.IsCompilerGenerated(typeDef))
+		TypeDefinition typeDef = WinMDReader.GetTypeDefinition(typeDefHandle);
+		if (IsCompilerGenerated(typeDef))
 		{
 			return null;
 		}
 
 		// Skip if the compilation already defines this type or can access it from elsewhere.
-		string name = this.Reader.GetString(typeDef.Name);
-		string ns = this.Reader.GetString(typeDef.Namespace);
-		bool isManagedType = this.IsManagedType(typeDefHandle);
-		string fullyQualifiedName = this.GetMangledIdentifier(ns + "." + name, context.AllowMarshaling, isManagedType);
+		string name = WinMDReader.GetString(typeDef.Name);
+		string ns = WinMDReader.GetString(typeDef.Namespace);
+		bool isManagedType = IsManagedType(typeDefHandle);
+		string fullyQualifiedName = GetMangledIdentifier(ns + "." + name, context.AllowMarshaling, isManagedType);
 
 		// Skip if the compilation already defines this type or can access it from elsewhere.
 		// But if we have more than one match, the compiler won't be able to resolve our type references.
 		// In such a case, we'll prefer to just declare our own local symbol.
-		if (this.IsTypeAlreadyFullyDeclared(fullyQualifiedName))
+		if (IsTypeAlreadyFullyDeclared(fullyQualifiedName))
 		{
 			// The type already exists either in this project or a referenced one.
 			return null;
@@ -1230,28 +1182,28 @@ public partial class Generator : IGenerator, IDisposable
 		try
 		{
 			StringHandle baseTypeName, baseTypeNamespace;
-			this.GetBaseTypeInfo(typeDef, out baseTypeName, out baseTypeNamespace);
+			GetBaseTypeInfo(typeDef, out baseTypeName, out baseTypeNamespace);
 
 			MemberDeclarationSyntax? typeDeclaration;
 
 			if ((typeDef.Attributes & TypeAttributes.Interface) == TypeAttributes.Interface)
 			{
-				typeDeclaration = this.DeclareInterface(typeDefHandle, context);
+				typeDeclaration = DeclareInterface(typeDefHandle, context);
 			}
-			else if (this.Reader.StringComparer.Equals(baseTypeName, nameof(ValueType)) && this.Reader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
+			else if (WinMDReader.StringComparer.Equals(baseTypeName, nameof(ValueType)) && WinMDReader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
 			{
 				// Is this a special typedef struct?
-				if (this.IsTypeDefStruct(typeDef))
+				if (IsTypeDefStruct(typeDef))
 				{
-					typeDeclaration = this.DeclareTypeDefStruct(typeDef, typeDefHandle);
+					typeDeclaration = DeclareTypeDefStruct(typeDef, typeDefHandle);
 				}
-				else if (this.IsEmptyStructWithGuid(typeDef))
+				else if (IsEmptyStructWithGuid(typeDef))
 				{
-					typeDeclaration = this.DeclareCocreatableClass(typeDef);
+					typeDeclaration = DeclareCocreatableClass(typeDef);
 				}
 				else
 				{
-					StructDeclarationSyntax structDeclaration = this.DeclareStruct(typeDefHandle, context);
+					StructDeclarationSyntax structDeclaration = DeclareStruct(typeDefHandle, context);
 
 					// Proactively generate all nested types as well.
 					// If the outer struct is using ExplicitLayout, generate the nested types as unmanaged structs since that's what will be needed.
@@ -1264,7 +1216,7 @@ public partial class Generator : IGenerator, IDisposable
 
 					foreach (TypeDefinitionHandle nestedHandle in typeDef.GetNestedTypes())
 					{
-						if (this.RequestInteropTypeHelper(nestedHandle, nestedContext) is { } nestedType)
+						if (RequestInteropTypeHelper(nestedHandle, nestedContext) is { } nestedType)
 						{
 							structDeclaration = structDeclaration.AddMembers(nestedType);
 						}
@@ -1273,16 +1225,16 @@ public partial class Generator : IGenerator, IDisposable
 					typeDeclaration = structDeclaration;
 				}
 			}
-			else if (this.Reader.StringComparer.Equals(baseTypeName, nameof(Enum)) && this.Reader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
+			else if (WinMDReader.StringComparer.Equals(baseTypeName, nameof(Enum)) && WinMDReader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
 			{
 				// Consider reusing .NET types like FILE_SHARE_FLAGS -> System.IO.FileShare
-				typeDeclaration = this.DeclareEnum(typeDef);
+				typeDeclaration = DeclareEnum(typeDef);
 			}
-			else if (this.Reader.StringComparer.Equals(baseTypeName, nameof(MulticastDelegate)) && this.Reader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
+			else if (WinMDReader.StringComparer.Equals(baseTypeName, nameof(MulticastDelegate)) && WinMDReader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
 			{
 				typeDeclaration =
-					this.IsUntypedDelegate(typeDef) ? this.DeclareUntypedDelegate(typeDef) :
-					this._options.AllowMarshaling ? this.DeclareDelegate(typeDef) :
+					IsUntypedDelegate(typeDef) ? DeclareUntypedDelegate(typeDef) :
+					_options.AllowMarshaling ? DeclareDelegate(typeDef) :
 					null;
 			}
 			else
@@ -1304,15 +1256,15 @@ public partial class Generator : IGenerator, IDisposable
 		}
 		catch (Exception ex)
 		{
-			throw new GenerationFailedException($"Failed to generate {this.Reader.GetString(typeDef.Name)}{(context.AllowMarshaling ? string.Empty : " (unmanaged)")}", ex);
+			throw new GenerationFailedException($"Failed to generate {WinMDReader.GetString(typeDef.Name)}{(context.AllowMarshaling ? string.Empty : " (unmanaged)")}", ex);
 		}
 	}
 
-	private bool IsCompatibleWithPlatform(CustomAttributeHandleCollection customAttributesOnMember) => WinMDFileHelper.IsCompatibleWithPlatform(this.Reader, this.WinMDIndexer, this._compilation?.Options.Platform, customAttributesOnMember);
+	private bool IsCompatibleWithPlatform(CustomAttributeHandleCollection customAttributesOnMember) => WinMDFileHelper.IsCompatibleWithPlatform(WinMDReader, WinMDIndexer, _compilation?.Options.Platform, customAttributesOnMember);
 
 	private void TryGenerateTypeOrThrow(string possiblyQualifiedName)
 	{
-		if (!this.TryGenerateType(possiblyQualifiedName, out _))
+		if (!TryGenerateType(possiblyQualifiedName, out _))
 		{
 			throw new GenerationFailedException("Unable to find expected type: " + possiblyQualifiedName);
 		}
@@ -1320,7 +1272,7 @@ public partial class Generator : IGenerator, IDisposable
 
 	private void TryGenerateConstantOrThrow(string possiblyQualifiedName)
 	{
-		if (!this.TryGenerateConstant(possiblyQualifiedName, out _))
+		if (!TryGenerateConstant(possiblyQualifiedName, out _))
 		{
 			throw new GenerationFailedException("Unable to find expected constant: " + possiblyQualifiedName);
 		}
@@ -1331,9 +1283,9 @@ public partial class Generator : IGenerator, IDisposable
 		ExpressionSyntax thisValue = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), IdentifierName("Value"));
 		ExpressionSyntax thisLength = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), IdentifierName("Length"));
 
-		// internal X AsSpan() => this.Value is null ? default(X) : new X(this.Value, this.Length);
+		// internal X AsSpan() => Value is null ? default(X) : new X(Value, Length);
 		return MethodDeclaration(spanType, Identifier("AsSpan"))
-			.AddModifiers(TokenWithSpace(this.Visibility))
+			.AddModifiers(TokenWithSpace(Visibility))
 			.WithExpressionBody(ArrowExpressionClause(ConditionalExpression(
 				condition: IsPatternExpression(thisValue, ConstantPattern(LiteralExpression(SyntaxKind.NullLiteralExpression))),
 				whenTrue: DefaultExpression(spanType),
@@ -1344,8 +1296,8 @@ public partial class Generator : IGenerator, IDisposable
 
 	private string GetNormalizedModuleName(MethodImport import)
 	{
-		ModuleReference module = this.Reader.GetModuleReference(import.Module);
-		string moduleName = this.Reader.GetString(module.Name);
+		ModuleReference module = WinMDReader.GetModuleReference(import.Module);
+		string moduleName = WinMDReader.GetString(module.Name);
 		if (CanonicalCapitalizations.TryGetValue(moduleName, out string? canonicalModuleName))
 		{
 			moduleName = canonicalModuleName;
@@ -1358,20 +1310,20 @@ public partial class Generator : IGenerator, IDisposable
 	{
 		if (nestedTypeDef.IsNested)
 		{
-			return this.GetNamespaceForPossiblyNestedType(this.Reader.GetTypeDefinition(nestedTypeDef.GetDeclaringType()));
+			return GetNamespaceForPossiblyNestedType(WinMDReader.GetTypeDefinition(nestedTypeDef.GetDeclaringType()));
 		}
 		else
 		{
-			return this.Reader.GetString(nestedTypeDef.Namespace);
+			return WinMDReader.GetString(nestedTypeDef.Namespace);
 		}
 	}
 
 	private ParameterListSyntax CreateParameterList(MethodDefinition methodDefinition, MethodSignature<TypeHandleInfo> signature, TypeSyntaxSettings typeSettings, GeneratingElement forElement)
-		=> FixTrivia(ParameterList().AddParameters(methodDefinition.GetParameters().Select(this.Reader.GetParameter).Where(p => !p.Name.IsNil).Select(p => this.CreateParameter(signature.ParameterTypes[p.SequenceNumber - 1], p, typeSettings, forElement)).ToArray()));
+		=> FixTrivia(ParameterList().AddParameters(methodDefinition.GetParameters().Select(WinMDReader.GetParameter).Where(p => !p.Name.IsNil).Select(p => CreateParameter(signature.ParameterTypes[p.SequenceNumber - 1], p, typeSettings, forElement)).ToArray()));
 
 	private ParameterSyntax CreateParameter(TypeHandleInfo parameterInfo, Parameter parameter, TypeSyntaxSettings typeSettings, GeneratingElement forElement)
 	{
-		string name = this.Reader.GetString(parameter.Name);
+		string name = WinMDReader.GetString(parameter.Name);
 		try
 		{
 			// TODO:
@@ -1419,7 +1371,7 @@ public partial class Generator : IGenerator, IDisposable
 				@default: null);
 			parameterSyntax = parameterTypeSyntax.AddMarshalAs(parameterSyntax);
 
-			if (this.FindInteropDecorativeAttribute(parameter.GetCustomAttributes(), "RetValAttribute") is not null)
+			if (FindInteropDecorativeAttribute(parameter.GetCustomAttributes(), "RetValAttribute") is not null)
 			{
 				parameterSyntax = parameterSyntax.WithAdditionalAnnotations(IsRetValAnnotation);
 			}
@@ -1434,7 +1386,7 @@ public partial class Generator : IGenerator, IDisposable
 
 	private void DeclareSliceAtNullExtensionMethodIfNecessary()
 	{
-		if (this._sliceAtNullMethodDecl is null)
+		if (_sliceAtNullMethodDecl is null)
 		{
 			IdentifierNameSyntax valueParam = IdentifierName("value");
 			IdentifierNameSyntax lengthLocal = IdentifierName("length");
@@ -1449,8 +1401,8 @@ public partial class Generator : IGenerator, IDisposable
 							ArgumentList().AddArguments(Argument(LiteralExpression(SyntaxKind.CharacterLiteralExpression, Literal('\0')))))))));
 
 			// static ReadOnlySpan<char> SliceAtNull(this ReadOnlySpan<char> value)
-			this._sliceAtNullMethodDecl = MethodDeclaration(charSpan, SliceAtNullMethodName.Identifier)
-				.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.StaticKeyword))
+			_sliceAtNullMethodDecl = MethodDeclaration(charSpan, SliceAtNullMethodName.Identifier)
+				.AddModifiers(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.StaticKeyword))
 				.AddParameterListParameters(Parameter(valueParam.Identifier).WithType(charSpan).AddModifiers(TokenWithSpace(SyntaxKind.ThisKeyword)))
 				.WithBody(Block().AddStatements(
 					lengthLocalDeclaration,
@@ -1463,20 +1415,20 @@ public partial class Generator : IGenerator, IDisposable
 							ArgumentList().AddArguments(Argument(LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(0))), Argument(lengthLocal)))))));
 		}
 
-		this._volatileCode.AddInlineArrayIndexerExtension(this._sliceAtNullMethodDecl);
+		_volatileCode.AddInlineArrayIndexerExtension(_sliceAtNullMethodDecl);
 	}
 
 	private IEnumerable<NamespaceMetadata> GetNamespacesToSearch(string? @namespace)
 	{
-		if (@namespace is object)
+		if (@namespace is not null)
 		{
-			return this.WinMDIndexer.MetadataByNamespace.TryGetValue(@namespace, out NamespaceMetadata? metadata)
+			return WinMDIndexer.MetadataByNamespace.TryGetValue(@namespace, out NamespaceMetadata? metadata)
 				? new[] { metadata }
-				: Array.Empty<NamespaceMetadata>();
+				: [];
 		}
 		else
 		{
-			return this.WinMDIndexer.MetadataByNamespace.Values;
+			return WinMDIndexer.MetadataByNamespace.Values;
 		}
 	}
 
@@ -1491,7 +1443,7 @@ public partial class Generator : IGenerator, IDisposable
 
 		internal TypeSyntaxSettings Filter(TypeSyntaxSettings settings)
 		{
-			if (!this.AllowMarshaling && settings.AllowMarshaling)
+			if (!AllowMarshaling && settings.AllowMarshaling)
 			{
 				settings = settings with { AllowMarshaling = false };
 			}

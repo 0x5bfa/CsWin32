@@ -48,12 +48,12 @@ public partial class Generator
 	/// </remarks>
 	private TypeDeclarationSyntax? DeclareInterface(TypeDefinitionHandle typeDefHandle, Context context)
 	{
-		TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefHandle);
+		TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(typeDefHandle);
 		var baseTypes = ImmutableStack.Create<QualifiedTypeDefinitionHandle>();
 		(Generator Generator, InterfaceImplementationHandle Handle) baseTypeHandle = (this, typeDef.GetInterfaceImplementations().SingleOrDefault());
 		while (!baseTypeHandle.Handle.IsNil)
 		{
-			InterfaceImplementation baseTypeImpl = baseTypeHandle.Generator.Reader.GetInterfaceImplementation(baseTypeHandle.Handle);
+			InterfaceImplementation baseTypeImpl = baseTypeHandle.Generator.WinMDReader.GetInterfaceImplementation(baseTypeHandle.Handle);
 			if (!baseTypeHandle.Generator.TryGetTypeDefHandle((TypeReferenceHandle)baseTypeImpl.Interface, out QualifiedTypeDefinitionHandle baseTypeDefHandle))
 			{
 				throw new GenerationFailedException("Failed to find base type.");
@@ -94,8 +94,8 @@ public partial class Generator
 
 	private TypeDeclarationSyntax DeclareInterfaceAsStruct(TypeDefinitionHandle typeDefHandle, ImmutableStack<QualifiedTypeDefinitionHandle> baseTypes, Context context)
 	{
-		TypeDefinition typeDef = this.Reader.GetTypeDefinition(typeDefHandle);
-		string originalIfaceName = this.Reader.GetString(typeDef.Name);
+		TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(typeDefHandle);
+		string originalIfaceName = this.WinMDReader.GetString(typeDef.Name);
 		bool isManagedType = this.IsManagedType(typeDefHandle);
 		IdentifierNameSyntax ifaceName = IdentifierName(this.GetMangledIdentifier(originalIfaceName, context.AllowMarshaling, isManagedType));
 		IdentifierNameSyntax vtblFieldName = IdentifierName("lpVtbl");
@@ -122,7 +122,7 @@ public partial class Generator
 		{
 			QualifiedTypeDefinitionHandle qualifiedBaseType = baseTypes.Peek();
 			baseTypes = baseTypes.Pop();
-			TypeDefinition baseType = qualifiedBaseType.Generator.Reader.GetTypeDefinition(qualifiedBaseType.DefinitionHandle);
+			TypeDefinition baseType = qualifiedBaseType.Generator.WinMDReader.GetTypeDefinition(qualifiedBaseType.DefinitionHandle);
 			IEnumerable<QualifiedMethodDefinitionHandle> methodsThisType = baseType.GetMethods().Select(m => new QualifiedMethodDefinitionHandle(qualifiedBaseType.Generator, m));
 			allMethods.AddRange(methodsThisType);
 
@@ -561,13 +561,13 @@ public partial class Generator
 
 	private TypeDeclarationSyntax? DeclareInterfaceAsInterface(TypeDefinition typeDef, ImmutableStack<QualifiedTypeDefinitionHandle> baseTypes, Context context, bool interfaceAsSubtype = false)
 	{
-		if (this.Reader.StringComparer.Equals(typeDef.Name, "IUnknown") || this.Reader.StringComparer.Equals(typeDef.Name, "IDispatch"))
+		if (this.WinMDReader.StringComparer.Equals(typeDef.Name, "IUnknown") || this.WinMDReader.StringComparer.Equals(typeDef.Name, "IDispatch"))
 		{
 			// We do not generate interfaces for these COM base types.
 			return null;
 		}
 
-		string actualIfaceName = this.Reader.GetString(typeDef.Name);
+		string actualIfaceName = this.WinMDReader.GetString(typeDef.Name);
 		IdentifierNameSyntax ifaceName = interfaceAsSubtype ? NestedCOMInterfaceName : IdentifierName(actualIfaceName);
 		TypeSyntaxSettings typeSettings = this._comSignatureTypeSettings;
 
@@ -629,12 +629,12 @@ public partial class Generator
 
 		var members = new List<MemberDeclarationSyntax>();
 		var friendlyOverloads = new List<MethodDeclarationSyntax>();
-		ISet<string> declaredProperties = this.GetDeclarableProperties(allMethods.Select(this.Reader.GetMethodDefinition), actualIfaceName, allowNonConsecutiveAccessors: false, context);
+		ISet<string> declaredProperties = this.GetDeclarableProperties(allMethods.Select(this.WinMDReader.GetMethodDefinition), actualIfaceName, allowNonConsecutiveAccessors: false, context);
 
 		foreach (MethodDefinitionHandle methodDefHandle in allMethods)
 		{
-			MethodDefinition methodDefinition = this.Reader.GetMethodDefinition(methodDefHandle);
-			string methodName = this.Reader.GetString(methodDefinition.Name);
+			MethodDefinition methodDefinition = this.WinMDReader.GetMethodDefinition(methodDefHandle);
+			string methodName = this.WinMDReader.GetString(methodDefinition.Name);
 			inheritedMethods--;
 			try
 			{
@@ -731,7 +731,7 @@ public partial class Generator
 
 				if (methodDeclaration is not null)
 				{
-					NameSyntax declaringTypeName = HandleTypeHandleInfo.GetNestingQualifiedName(this, this.Reader, typeDef, hasUnmanagedSuffix: false, isInterfaceNestedInStruct: interfaceAsSubtype);
+					NameSyntax declaringTypeName = HandleTypeHandleInfo.GetNestingQualifiedName(this, this.WinMDReader, typeDef, hasUnmanagedSuffix: false, isInterfaceNestedInStruct: interfaceAsSubtype);
 					friendlyOverloads.AddRange(
 						this.DeclareFriendlyOverloads(methodDefinition, methodDeclaration, declaringTypeName, FriendlyOverloadOf.InterfaceMethod, this.injectedPInvokeHelperMethodsToFriendlyOverloadsExtensions));
 				}
@@ -769,7 +769,7 @@ public partial class Generator
 		// so we don't leave extension methods behind if we fail to generate the target interface.
 		if (friendlyOverloads.Count > 0)
 		{
-			string ns = this.Reader.GetString(typeDef.Namespace);
+			string ns = this.WinMDReader.GetString(typeDef.Namespace);
 			if (this.TryStripCommonNamespace(ns, out string? strippedNamespace))
 			{
 				ns = strippedNamespace;
@@ -941,7 +941,7 @@ public partial class Generator
 		{
 			// Sometimes another method actually *does* qualify as a property accessor, which would have this method as another accessor if it qualified.
 			// But since this doesn't qualify, produce the property name that should be disqualified as a whole since C# doesn't like seeing property X and method set_X as seperate declarations.
-			string disqualifiedMethodName = this.Reader.GetString(methodDefinition.Name);
+			string disqualifiedMethodName = this.WinMDReader.GetString(methodDefinition.Name);
 			int index = disqualifiedMethodName.IndexOf('_');
 			if (index > 0)
 			{
@@ -952,7 +952,7 @@ public partial class Generator
 		}
 
 		MethodSignature<TypeHandleInfo> signature = methodDefinition.DecodeSignature(SignatureHandleProvider.Instance, null);
-		string methodName = this.Reader.GetString(methodDefinition.Name);
+		string methodName = this.WinMDReader.GetString(methodDefinition.Name);
 		if (this.UsePreserveSigForComMethod(methodDefinition, signature, ifaceName, methodName))
 		{
 			return false;
@@ -978,7 +978,7 @@ public partial class Generator
 				return false;
 			}
 
-			Parameter propertyTypeParameter = this.Reader.GetParameter(parameters.Skip(1).Single());
+			Parameter propertyTypeParameter = this.WinMDReader.GetParameter(parameters.Skip(1).Single());
 			TypeHandleInfo propertyTypeInfo = signature.ParameterTypes[0];
 			propertyType = propertyTypeInfo.ToTypeSyntax(syntaxSettings, GeneratingElement.Property, propertyTypeParameter.GetCustomAttributes(), propertyTypeParameter.Attributes).Type;
 
@@ -1061,7 +1061,7 @@ public partial class Generator
 	/// </summary>
 	private ClassDeclarationSyntax DeclareCocreatableClass(TypeDefinition typeDef)
 	{
-		IdentifierNameSyntax name = IdentifierName(this.Reader.GetString(typeDef.Name));
+		IdentifierNameSyntax name = IdentifierName(this.WinMDReader.GetString(typeDef.Name));
 		Guid guid = this.FindGuidFromAttribute(typeDef) ?? throw new ArgumentException("Type does not have a GuidAttribute.");
 		SyntaxTokenList classModifiers = TokenList(TokenWithSpace(this.Visibility));
 		classModifiers = classModifiers.Add(TokenWithSpace(SyntaxKind.PartialKeyword));

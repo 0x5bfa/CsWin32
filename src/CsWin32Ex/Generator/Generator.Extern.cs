@@ -7,11 +7,11 @@ public partial class Generator
 	/// <inheritdoc/>
 	public void GenerateAllExternMethods(CancellationToken cancellationToken)
 	{
-		foreach (MethodDefinitionHandle methodHandle in this.WinMDIndexer.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetMethods()))
+		foreach (MethodDefinitionHandle methodHandle in this.WinMDIndexer.Apis.SelectMany(api => this.WinMDReader.GetTypeDefinition(api).GetMethods()))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
-			MethodDefinition methodDef = this.Reader.GetMethodDefinition(methodHandle);
+			MethodDefinition methodDef = this.WinMDReader.GetMethodDefinition(methodHandle);
 			if (this.IsCompatibleWithPlatform(methodDef.GetCustomAttributes()))
 			{
 				try
@@ -38,24 +38,24 @@ public partial class Generator
 	public bool TryGenerateAllExternMethods(string moduleName, CancellationToken cancellationToken)
 	{
 		bool successful = false;
-		foreach (MethodDefinitionHandle methodHandle in this.WinMDIndexer.Apis.SelectMany(api => this.Reader.GetTypeDefinition(api).GetMethods()))
+		foreach (MethodDefinitionHandle methodHandle in this.WinMDIndexer.Apis.SelectMany(api => this.WinMDReader.GetTypeDefinition(api).GetMethods()))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
-			MethodDefinition methodDef = this.Reader.GetMethodDefinition(methodHandle);
+			MethodDefinition methodDef = this.WinMDReader.GetMethodDefinition(methodHandle);
 			ModuleReferenceHandle moduleHandle = methodDef.GetImport().Module;
 			if (moduleHandle.IsNil)
 			{
 				continue;
 			}
 
-			ModuleReference module = this.Reader.GetModuleReference(moduleHandle);
-			if (this.Reader.StringComparer.Equals(module.Name, moduleName + ".dll", ignoreCase: true))
+			ModuleReference module = this.WinMDReader.GetModuleReference(moduleHandle);
+			if (this.WinMDReader.StringComparer.Equals(module.Name, moduleName + ".dll", ignoreCase: true))
 			{
 				string? bannedReason = null;
 				foreach (KeyValuePair<string, string> bannedApi in this.BannedAPIs)
 				{
-					if (this.Reader.StringComparer.Equals(methodDef.Name, bannedApi.Key))
+					if (this.WinMDReader.StringComparer.Equals(methodDef.Name, bannedApi.Key))
 					{
 						// Skip a banned API.
 						bannedReason = bannedApi.Value;
@@ -100,8 +100,8 @@ public partial class Generator
 
 		if (this.GetMethodByName(possiblyQualifiedName) is MethodDefinitionHandle methodDefHandle)
 		{
-			MethodDefinition methodDef = this.Reader.GetMethodDefinition(methodDefHandle);
-			string methodName = this.Reader.StringComparer.Equals(methodDef.Name, possiblyQualifiedName) ? possiblyQualifiedName : this.Reader.GetString(methodDef.Name);
+			MethodDefinition methodDef = this.WinMDReader.GetMethodDefinition(methodDefHandle);
+			string methodName = this.WinMDReader.StringComparer.Equals(methodDef.Name, possiblyQualifiedName) ? possiblyQualifiedName : this.WinMDReader.GetString(methodDef.Name);
 			if (this.BannedAPIs.TryGetValue(methodName, out string? reason))
 			{
 				throw new NotSupportedException(reason);
@@ -128,15 +128,15 @@ public partial class Generator
 			return;
 		}
 
-		MethodDefinition methodDefinition = this.Reader.GetMethodDefinition(methodDefinitionHandle);
+		MethodDefinition methodDefinition = this.WinMDReader.GetMethodDefinition(methodDefinitionHandle);
 		if (!this.IsCompatibleWithPlatform(methodDefinition.GetCustomAttributes()))
 		{
 			// We've been asked for an interop type that does not apply. This happens because the metadata
 			// may use a TypeReferenceHandle or TypeDefinitionHandle to just one of many arch-specific definitions of this type.
 			// Try to find the appropriate definition for our target architecture.
-			TypeDefinition declaringTypeDef = this.Reader.GetTypeDefinition(methodDefinition.GetDeclaringType());
-			string ns = this.Reader.GetString(declaringTypeDef.Namespace);
-			string methodName = this.Reader.GetString(methodDefinition.Name);
+			TypeDefinition declaringTypeDef = this.WinMDReader.GetTypeDefinition(methodDefinition.GetDeclaringType());
+			string ns = this.WinMDReader.GetString(declaringTypeDef.Namespace);
+			string methodName = this.WinMDReader.GetString(methodDefinition.Name);
 			if (this.WinMDIndexer.MetadataByNamespace[ns].MethodsForOtherPlatform.Contains(methodName))
 			{
 				throw new PlatformIncompatibleException($"Request for method ({methodName}) that is not available given the target platform.");
@@ -146,11 +146,11 @@ public partial class Generator
 		this._volatileCode.GenerateMethod(methodDefinitionHandle, () => this.DeclareExternMethod(methodDefinitionHandle));
 	}
 
-	private string GetMethodNamespace(MethodDefinition methodDef) => this.Reader.GetString(this.Reader.GetTypeDefinition(methodDef.GetDeclaringType()).Namespace);
+	private string GetMethodNamespace(MethodDefinition methodDef) => this.WinMDReader.GetString(this.WinMDReader.GetTypeDefinition(methodDef.GetDeclaringType()).Namespace);
 
 	private void DeclareExternMethod(MethodDefinitionHandle methodDefinitionHandle)
 	{
-		MethodDefinition methodDefinition = this.Reader.GetMethodDefinition(methodDefinitionHandle);
+		MethodDefinition methodDefinition = this.WinMDReader.GetMethodDefinition(methodDefinitionHandle);
 		MethodImport import = methodDefinition.GetImport();
 		if (import.Name.IsNil)
 		{
@@ -158,7 +158,7 @@ public partial class Generator
 			return;
 		}
 
-		string? methodName = this.Reader.GetString(methodDefinition.Name);
+		string? methodName = this.WinMDReader.GetString(methodDefinition.Name);
 		try
 		{
 			if (this.WideCharOnly && IsAnsiFunction(methodName))
@@ -178,7 +178,7 @@ public partial class Generator
 
 			if (!import.Name.IsNil && import.Name != methodDefinition.Name)
 			{
-				entrypoint = this.Reader.GetString(import.Name);
+				entrypoint = this.WinMDReader.GetString(import.Name);
 			}
 
 			// If this method releases a handle, recreate the method signature such that we take the struct rather than the SafeHandle as a parameter.
@@ -194,7 +194,7 @@ public partial class Generator
 			TypeSyntax?[]? parameterEnumType = null;
 			foreach (ParameterHandle parameterHandle in methodDefinition.GetParameters())
 			{
-				Parameter parameter = this.Reader.GetParameter(parameterHandle);
+				Parameter parameter = this.WinMDReader.GetParameter(parameterHandle);
 				if (parameter.SequenceNumber == 0)
 				{
 					continue;

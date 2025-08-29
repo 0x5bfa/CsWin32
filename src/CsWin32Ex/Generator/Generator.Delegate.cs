@@ -42,7 +42,7 @@ public partial class Generator
 			throw new NotSupportedException("Delegates are not declared while in all-structs mode.");
 		}
 
-		string name = this.Reader.GetString(typeDef.Name);
+		string name = this.WinMDReader.GetString(typeDef.Name);
 		TypeSyntaxSettings typeSettings = this._delegateSignatureTypeSettings;
 
 		CallingConvention? callingConvention = null;
@@ -70,7 +70,7 @@ public partial class Generator
 
 	private MemberDeclarationSyntax DeclareUntypedDelegate(TypeDefinition typeDef)
 	{
-		IdentifierNameSyntax name = IdentifierName(this.Reader.GetString(typeDef.Name));
+		IdentifierNameSyntax name = IdentifierName(this.WinMDReader.GetString(typeDef.Name));
 		IdentifierNameSyntax valueFieldName = IdentifierName("Value");
 
 		// internal IntPtr Value;
@@ -111,7 +111,7 @@ public partial class Generator
 
 	private void GetSignatureForDelegate(TypeDefinition typeDef, out MethodDefinition invokeMethodDef, out MethodSignature<TypeHandleInfo> signature, out CustomAttributeHandleCollection? returnTypeAttributes)
 	{
-		invokeMethodDef = typeDef.GetMethods().Select(this.Reader.GetMethodDefinition).Single(def => this.Reader.StringComparer.Equals(def.Name, "Invoke"));
+		invokeMethodDef = typeDef.GetMethods().Select(this.WinMDReader.GetMethodDefinition).Single(def => this.WinMDReader.StringComparer.Equals(def.Name, "Invoke"));
 		signature = invokeMethodDef.DecodeSignature(SignatureHandleProvider.Instance, null);
 		returnTypeAttributes = this.GetReturnTypeCustomAttributes(invokeMethodDef);
 	}
@@ -126,7 +126,7 @@ public partial class Generator
 
 		foreach (ParameterHandle parameterHandle in methodDefinition.GetParameters())
 		{
-			Parameter parameter = this.Reader.GetParameter(parameterHandle);
+			Parameter parameter = this.WinMDReader.GetParameter(parameterHandle);
 			if (parameter.SequenceNumber == 0)
 			{
 				continue;

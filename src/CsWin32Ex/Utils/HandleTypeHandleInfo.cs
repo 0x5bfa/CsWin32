@@ -157,7 +157,7 @@ internal record HandleTypeHandleInfo : TypeHandleInfo
 		{
 			return new TypeSyntaxAndMarshaling(PredefinedType(Token(SyntaxKind.ObjectKeyword)), marshalAs, null);
 		}
-		else if (!inputs.AllowMarshaling && isDelegate && inputs.Generator is object && !Generator.IsUntypedDelegate(delegateDefinition.Generator.Reader, delegateDefinition.Definition))
+		else if (!inputs.AllowMarshaling && isDelegate && inputs.Generator is object && !Generator.IsUntypedDelegate(delegateDefinition.Generator.WinMDReader, delegateDefinition.Definition))
 		{
 			return new TypeSyntaxAndMarshaling(inputs.Generator.FunctionPointer(delegateDefinition));
 		}
@@ -230,12 +230,12 @@ internal record HandleTypeHandleInfo : TypeHandleInfo
 			return null;
 		}
 
-		TypeDefinition typeDef = generator.Reader.GetTypeDefinition(typeDefHandle);
+		TypeDefinition typeDef = generator.WinMDReader.GetTypeDefinition(typeDefHandle);
 		generator.GetBaseTypeInfo(typeDef, out StringHandle baseName, out StringHandle baseNamespace);
-		if (generator.Reader.StringComparer.Equals(baseName, nameof(ValueType)) && generator.Reader.StringComparer.Equals(baseNamespace, nameof(System)))
+		if (generator.WinMDReader.StringComparer.Equals(baseName, nameof(ValueType)) && generator.WinMDReader.StringComparer.Equals(baseNamespace, nameof(System)))
 		{
 			// When marshaling, the VARIANT struct becomes object, which is *not* a value type.
-			if (inputs.AllowMarshaling && generator.Reader.StringComparer.Equals(typeDef.Name, "VARIANT"))
+			if (inputs.AllowMarshaling && generator.WinMDReader.StringComparer.Equals(typeDef.Name, "VARIANT"))
 			{
 				return false;
 			}
@@ -243,7 +243,7 @@ internal record HandleTypeHandleInfo : TypeHandleInfo
 			return true;
 		}
 
-		if (generator.Reader.StringComparer.Equals(baseName, nameof(Enum)) && generator.Reader.StringComparer.Equals(baseNamespace, nameof(System)))
+		if (generator.WinMDReader.StringComparer.Equals(baseName, nameof(Enum)) && generator.WinMDReader.StringComparer.Equals(baseNamespace, nameof(System)))
 		{
 			return true;
 		}
@@ -319,15 +319,15 @@ internal record HandleTypeHandleInfo : TypeHandleInfo
 
 		if (!tdh.IsNil && generator is object)
 		{
-			TypeDefinition td = generator.Reader.GetTypeDefinition(tdh);
+			TypeDefinition td = generator.WinMDReader.GetTypeDefinition(tdh);
 			if ((td.Attributes & TypeAttributes.Class) == TypeAttributes.Class)
 			{
 				generator.GetBaseTypeInfo(td, out StringHandle baseTypeName, out StringHandle baseTypeNamespace);
 				if (!baseTypeName.IsNil)
 				{
-					if (generator.Reader.StringComparer.Equals(baseTypeName, nameof(MulticastDelegate)) && generator.Reader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
+					if (generator.WinMDReader.StringComparer.Equals(baseTypeName, nameof(MulticastDelegate)) && generator.WinMDReader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
 					{
-						delegateTypeDef = new(generator, generator.Reader.GetTypeDefinition(tdh));
+						delegateTypeDef = new(generator, generator.WinMDReader.GetTypeDefinition(tdh));
 						return true;
 					}
 				}
