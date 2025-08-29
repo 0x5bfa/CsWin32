@@ -26,7 +26,7 @@
     <File Path="tests/GenerationSandbox.props" />
     <Project Path="tests/CsWin32Ex.Tests/CsWin32Ex.Tests.csproj" />
     <Project Path="tests/CsWin32Ex.Samples.ISpellChecker/CsWin32Ex.Samples.ISpellChecker.csproj" />
-    <Project Path="tests/CsWin32Ex.Samples.Windowing/CsWin32Ex.Samples.Windowing.csproj" />
+    <Project Path="tests/CsWin32Ex.Samples.WinRTCompositionInterop/CsWin32Ex.Samples.WinRTCompositionInterop.csproj" />
     <Project Path="tests/CsWin32Ex.StandaloneGen.Tests/CsWin32Ex.StandaloneGen.Tests.csproj" />
     <Project Path="tests/CsWin32Ex.StandaloneGen.Unmarshalled.Tests/CsWin32Ex.StandaloneGen.Unmarshalled.Tests.csproj" />
   </Folder>

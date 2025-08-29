@@ -13,14 +13,14 @@ public partial class Generator
 		// Get if the enum has the "FlagsAttribute"
 		bool isFlags = FindAttribute(typeDefinition.GetCustomAttributes(), nameof(System), nameof(FlagsAttribute)) is not null;
 
-		List<EnumMemberDeclarationSyntax> enumValues = [];
+		List<EnumMemberDeclarationSyntax> enumMemberDeclarationSyntaxCollection = [];
 		TryGetEnumBaseType(typeDefinition, out var enumBaseType);
 
 		// Generate the enum
 		foreach (var fieldDefHandle in typeDefinition.GetFields())
 		{
 			if (BuildEnumMemberDeclarationSyntax(fieldDefHandle, enumBaseType, isFlags, out var declarationSyntax))
-				enumValues.Add(declarationSyntax);
+				enumMemberDeclarationSyntaxCollection.Add(declarationSyntax);
 		}
 
 		// Generate the associated constants and put them into the enum as well
@@ -31,15 +31,13 @@ public partial class Generator
 				decodedAttribute.FixedArguments[0].Value is string constName &&
 				TryFindConstantByNameInAllNamespaces(constName, out FieldDefinitionHandle fieldDefinitionHandle) &&
 				BuildEnumMemberDeclarationSyntax(fieldDefinitionHandle, enumBaseType, isFlags, out var declarationSyntax))
-				enumValues.Add(declarationSyntax);
+				enumMemberDeclarationSyntaxCollection.Add(declarationSyntax);
 		}
-
-		var separatedList = SyntaxFactory.SeparatedList(enumValues);
 
 		// Build the enum declaration syntax tree
 		string? name = WinMDReader.GetString(typeDefinition.Name);
 		EnumDeclarationSyntax result = EnumDeclaration(Identifier(name))
-			.WithMembers(SyntaxFactory.SeparatedList(enumValues, enumValues.Select(enumValue => TokenWithLineFeed(SyntaxKind.CommaToken))))
+			.WithMembers(SyntaxFactory.SeparatedList(enumMemberDeclarationSyntaxCollection, enumMemberDeclarationSyntaxCollection.Select(enumValue => TokenWithLineFeed(SyntaxKind.CommaToken))))
 			.WithModifiers(TokenList(TokenWithSpace(Visibility)));
 
 		// If the base type is not "System.Int32" (the default type), explicitly set it in the enum declaration
@@ -98,8 +96,6 @@ public partial class Generator
 			.WithEqualsValue(EqualsValueClause(enumValueExpressionSyntax));
 
 		return true;
-
-		//enumValues.Add(TokenWithLineFeed(SyntaxKind.CommaToken));
 	}
 
 	private bool TryFindConstantByNameInAllNamespaces(string constName, out FieldDefinitionHandle fieldDefinitionHandle)
