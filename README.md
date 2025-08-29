@@ -8,12 +8,32 @@ Additionally, all `Guid` properties now use RVA-backed fields, allowing you to t
 
 The codebase has been greatly simplified: unnecessary files have been removed, and a single GitHub Actions workflow has been set up to ensure code sustainability and testability.
 
-## Usage
-
 ```console
 > dotnet add package CsWin32Ex --version 1.0.0
 ```
 
-## External WinMD file inputs
+## Authoring CsWin32(Ex)-compatible WinMD files
 
-_Coming soon._
+When authoring a WinMD file for use with CsWin32 (or CsWin32Ex), ensure that you follow the requirements outlined below.
+
+Although these requirements ideally should not exist, maintaining compatibility with existing WinMD files supported by upstream CsWin32 takes precedence.
+
+### Native handles
+
+To generate a proper dispose method for a native handle, define a `RAIIFreeAttribute` with the method name as its first parameter, and apply it to the structs representing native handles (the generator only checks for the attribute’s name; its origin does not matter).
+
+```cs
+public class RAIIFreeAttribute(string Name) : Attribute {}
+```
+
+```cs
+[RAIIFree("CloseHandle")]
+public struct HANDLE
+{
+    // When this is IntPtr or UIntPtr, an appropriate SafeHandle will also be generated.
+    public unsafe void* Value;
+}
+
+```
+
+_More coming soon._
