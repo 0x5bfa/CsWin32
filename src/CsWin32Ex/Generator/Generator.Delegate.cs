@@ -4,150 +4,101 @@ namespace CsWin32Ex;
 
 public partial class Generator
 {
-	internal static bool IsUntypedDelegate(MetadataReader reader, TypeDefinition typeDef) => reader.StringComparer.Equals(typeDef.Name, "PROC") || reader.StringComparer.Equals(typeDef.Name, "FARPROC");
+	internal static bool IsUntypedDelegate(MetadataReader reader, TypeDefinition typeDef)
+		=> reader.StringComparer.Equals(typeDef.Name, "PROC") || reader.StringComparer.Equals(typeDef.Name, "FARPROC");
 
-	internal FunctionPointerTypeSyntax FunctionPointer(QualifiedTypeDefinition delegateType)
+	/// <summary>Creates a delegate declaration syntax from a <see cref="TypeDefinition"/>.</summary>
+	/// <remarks>Creating a delegate when <see cref="GeneratorOptions.AllowMarshaling"/> is <see langword="true"/>.</remarks>
+	/// <param name="typeDefinition">The type to create a delegate syntax tree from.</param>
+	/// <returns>An instance of <see cref="DelegateDeclarationSyntax"/> that represents a delegate.</returns>
+	private DelegateDeclarationSyntax CreateTypedDelegateDeclaration(TypeDefinition typeDefinition)
 	{
-		if (delegateType.Generator != this)
-		{
-			FunctionPointerTypeSyntax? result = null;
-			delegateType.Generator._volatileCode.GenerationTransaction(() => result = delegateType.Generator.FunctionPointer(delegateType.Definition));
-			return result!;
-		}
-		else
-		{
-			return this.FunctionPointer(delegateType.Definition);
-		}
-	}
+		// Not expected but just in case
+		if (!_options.AllowMarshaling)
+			throw new NotSupportedException("Delegates will not be generated when the runtime marshalling is disabled.");
 
-	internal FunctionPointerTypeSyntax FunctionPointer(TypeDefinition delegateType)
-	{
-		CustomAttribute ufpAtt = this.FindAttribute(delegateType.GetCustomAttributes(), SystemRuntimeInteropServices, nameof(UnmanagedFunctionPointerAttribute))!.Value;
-		CustomAttributeValue<TypeSyntax> attArgs = ufpAtt.DecodeValue(CustomAttributeTypeProvider.Instance);
-		var callingConvention = (CallingConvention)attArgs.FixedArguments[0].Value!;
-
-		this.GetSignatureForDelegate(delegateType, out MethodDefinition invokeMethodDef, out MethodSignature<TypeHandleInfo> signature, out CustomAttributeHandleCollection? returnTypeAttributes);
-		if (this.FindAttribute(returnTypeAttributes, SystemRuntimeInteropServices, nameof(MarshalAsAttribute)).HasValue)
-		{
-			throw new NotSupportedException("Marshaling is not supported for function pointers.");
-		}
-
-		return this.FunctionPointer(invokeMethodDef, signature);
-	}
-
-	private DelegateDeclarationSyntax DeclareDelegate(TypeDefinition typeDef)
-	{
-		if (!this._options.AllowMarshaling)
-		{
-			throw new NotSupportedException("Delegates are not declared while in all-structs mode.");
-		}
-
-		string name = this.WinMDReader.GetString(typeDef.Name);
-		TypeSyntaxSettings typeSettings = this._delegateSignatureTypeSettings;
-
+		var delegateName = WinMDReader.GetString(typeDefinition.Name);
+		var typeSettings = _delegateSignatureTypeSettings;
 		CallingConvention? callingConvention = null;
-		if (this.FindAttribute(typeDef.GetCustomAttributes(), SystemRuntimeInteropServices, nameof(UnmanagedFunctionPointerAttribute)) is CustomAttribute att)
+
+		// Check for "[UnmanagedFunctionPointerAttribute]" to get the calling convention
+		if (FindAttribute(typeDefinition.GetCustomAttributes(), SystemRuntimeInteropServices, nameof(UnmanagedFunctionPointerAttribute)) is CustomAttribute attribute)
 		{
-			CustomAttributeValue<TypeSyntax> args = att.DecodeValue(CustomAttributeTypeProvider.Instance);
+			CustomAttributeValue<TypeSyntax> args = attribute.DecodeValue(CustomAttributeTypeProvider.Instance);
 			callingConvention = (CallingConvention)(int)args.FixedArguments[0].Value!;
 		}
 
-		this.GetSignatureForDelegate(typeDef, out MethodDefinition invokeMethodDef, out MethodSignature<TypeHandleInfo> signature, out CustomAttributeHandleCollection? returnTypeAttributes);
-		TypeSyntaxAndMarshaling returnValue = signature.ReturnType.ToTypeSyntax(typeSettings, GeneratingElement.Delegate, returnTypeAttributes);
+		// Get the parameters and return type of the delegate
+		GetSignatureOfDelegate(typeDefinition, out MethodDefinition invokeMethodDef, out MethodSignature<TypeHandleInfo> signature, out CustomAttributeHandleCollection? returnTypeAttributes);
+		var returnValueType = signature.ReturnType.ToTypeSyntax(typeSettings, GeneratingElement.Delegate, returnTypeAttributes);
 
-		DelegateDeclarationSyntax result = DelegateDeclaration(returnValue.Type, Identifier(name))
-			.WithParameterList(FixTrivia(this.CreateParameterList(invokeMethodDef, signature, typeSettings, GeneratingElement.Delegate)))
-			.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword));
-		result = returnValue.AddReturnMarshalAs(result);
+		// Build the delegate declaration syntax tree
+		DelegateDeclarationSyntax syntax = DelegateDeclaration(returnValueType.Type, Identifier(delegateName))
+			.WithParameterList(FixTrivia(CreateParameterList(invokeMethodDef, signature, typeSettings, GeneratingElement.Delegate)))
+			.AddModifiers(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword));
 
+		// Add the [MarshalAsAttribute] on the return type, if needed
+		syntax = returnValueType.AddReturnMarshalAs(syntax);
+
+		// Add the calling convention attribute if we found one
 		if (callingConvention.HasValue)
-		{
-			result = result.AddAttributeLists(AttributeList().AddAttributes(UnmanagedFunctionPointer(callingConvention.Value)).WithCloseBracketToken(TokenWithLineFeed(SyntaxKind.CloseBracketToken)));
-		}
+			syntax = syntax.AddAttributeLists(AttributeList().AddAttributes(UnmanagedFunctionPointer(callingConvention.Value)).WithCloseBracketToken(TokenWithLineFeed(SyntaxKind.CloseBracketToken)));
 
-		return result;
+		return syntax;
 	}
 
-	private MemberDeclarationSyntax DeclareUntypedDelegate(TypeDefinition typeDef)
+	/// <summary>Creates a struct from an untyped delegate utilizing <see cref="Marshal.GetDelegateForFunctionPointer{TDelegate}(IntPtr)"/>.</summary>
+	/// <param name="typeDefinition">The type to create a struct syntax tree with the marshalled delegate from.</param>
+	/// <returns>An instance of <see cref="StructDeclarationSyntax"/> that represents a struct.</returns>
+	private StructDeclarationSyntax CreateUntypedDelegateDeclaration(TypeDefinition typeDefinition)
 	{
-		IdentifierNameSyntax name = IdentifierName(this.WinMDReader.GetString(typeDef.Name));
-		IdentifierNameSyntax valueFieldName = IdentifierName("Value");
+		var typeName = IdentifierName(WinMDReader.GetString(typeDefinition.Name));
+		var valueFieldName = IdentifierName("Value");
 
-		// internal IntPtr Value;
-		FieldDeclarationSyntax valueField = FieldDeclaration(VariableDeclaration(IntPtrTypeSyntax.WithTrailingTrivia(TriviaList(Space)))
-			.AddVariables(VariableDeclarator(valueFieldName.Identifier))).AddModifiers(TokenWithSpace(this.Visibility));
+		// Generate "internal IntPtr Value;"
+		var fieldDeclaration = FieldDeclaration(VariableDeclaration(IntPtrTypeSyntax.WithTrailingTrivia(TriviaList(Space)))
+			.AddVariables(VariableDeclarator(valueFieldName.Identifier))).AddModifiers(TokenWithSpace(Visibility));
 
-		// internal T CreateDelegate<T>() => Marshal.GetDelegateForFunctionPointer<T>(this.Value);
-		IdentifierNameSyntax typeParameter = IdentifierName("TDelegate");
-		MemberAccessExpressionSyntax methodToCall = this._getDelegateForFunctionPointerGenericExists
-			? MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName(nameof(Marshal)), GenericName(nameof(Marshal.GetDelegateForFunctionPointer)).AddTypeArgumentListArguments(typeParameter))
+		// Generate "Marshal.GetDelegateForFunctionPointer<TDelegate>()" or "Marshal.GetDelegateForFunctionPointer()"
+		var genericTypeParameter = IdentifierName("TDelegate");
+		var methodCallSyntax = _getDelegateForFunctionPointerGenericExists
+			? MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName(nameof(Marshal)), GenericName(nameof(Marshal.GetDelegateForFunctionPointer)).AddTypeArgumentListArguments(genericTypeParameter))
 			: MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, IdentifierName(nameof(Marshal)), IdentifierName(nameof(Marshal.GetDelegateForFunctionPointer)));
-		ArgumentListSyntax arguments = ArgumentList().AddArguments(Argument(MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), valueFieldName)));
-		if (!this._getDelegateForFunctionPointerGenericExists)
-		{
-			arguments = arguments.AddArguments(Argument(TypeOfExpression(typeParameter)));
-		}
 
-		ExpressionSyntax bodyExpression = InvocationExpression(methodToCall, arguments);
-		if (!this._getDelegateForFunctionPointerGenericExists)
-		{
-			bodyExpression = CastExpression(typeParameter, bodyExpression);
-		}
+		// Generate an argument list for the method call
+		var argumentListSyntax = ArgumentList().AddArguments(Argument(MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), valueFieldName)));
+		if (!_getDelegateForFunctionPointerGenericExists)
+			argumentListSyntax = argumentListSyntax.AddArguments(Argument(TypeOfExpression(genericTypeParameter)));
 
-		MethodDeclarationSyntax createDelegateMethod = MethodDeclaration(typeParameter, Identifier("CreateDelegate"))
-			.AddTypeParameterListParameters(TypeParameter(typeParameter.Identifier))
-			.AddConstraintClauses(TypeParameterConstraintClause(typeParameter, SingletonSeparatedList<TypeParameterConstraintSyntax>(TypeConstraint(IdentifierName("Delegate")))))
+		// Generate "Marshal.GetDelegateForFunctionPointer<TDelegate>(this.Value)" or "(TDelegate)Marshal.GetDelegateForFunctionPointer(this.Value, typeof(TDelegate))"
+		ExpressionSyntax bodyExpression = InvocationExpression(methodCallSyntax, argumentListSyntax);
+		if (!_getDelegateForFunctionPointerGenericExists) bodyExpression = CastExpression(genericTypeParameter, bodyExpression);
+
+		// Generate "internal TDelegate CreateDelegate<TDelegate>() where TDelegate : Delegate => Marshal.GetDelegateForFunctionPointer<TDelegate>(this.Value);"
+		var methodDeclaration = MethodDeclaration(genericTypeParameter, Identifier("CreateDelegate"))
+			.AddTypeParameterListParameters(TypeParameter(genericTypeParameter.Identifier))
+			.AddConstraintClauses(TypeParameterConstraintClause(genericTypeParameter, SingletonSeparatedList<TypeParameterConstraintSyntax>(TypeConstraint(IdentifierName("Delegate")))))
 			.WithExpressionBody(ArrowExpressionClause(bodyExpression))
-			.AddModifiers(TokenWithSpace(this.Visibility))
+			.AddModifiers(TokenWithSpace(Visibility))
 			.WithSemicolonToken(SemicolonWithLineFeed);
 
-		StructDeclarationSyntax typedefStruct = StructDeclaration(name.Identifier)
-			.WithModifiers(TokenList(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.PartialKeyword)))
-			.AddMembers(valueField)
-			.AddMembers(this.CreateCommonTypeDefMembers(name, IntPtrTypeSyntax, valueFieldName).ToArray())
-			.AddMembers(createDelegateMethod);
-		return typedefStruct;
+		// Generate the complete struct declaration syntax tree
+		StructDeclarationSyntax structDeclarationSyntax = StructDeclaration(typeName.Identifier)
+			.WithModifiers(TokenList(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.PartialKeyword)))
+			.AddMembers(fieldDeclaration)
+			.AddMembers(CreateCommonTypeDefMembers(typeName, IntPtrTypeSyntax, valueFieldName).ToArray())
+			.AddMembers(methodDeclaration);
+
+		return structDeclarationSyntax;
 	}
 
-	private void GetSignatureForDelegate(TypeDefinition typeDef, out MethodDefinition invokeMethodDef, out MethodSignature<TypeHandleInfo> signature, out CustomAttributeHandleCollection? returnTypeAttributes)
+	private void GetSignatureOfDelegate(TypeDefinition typeDefinition, out MethodDefinition invokeMethodDefinition, out MethodSignature<TypeHandleInfo> signature, out CustomAttributeHandleCollection? returnTypeAttributes)
 	{
-		invokeMethodDef = typeDef.GetMethods().Select(this.WinMDReader.GetMethodDefinition).Single(def => this.WinMDReader.StringComparer.Equals(def.Name, "Invoke"));
-		signature = invokeMethodDef.DecodeSignature(SignatureHandleProvider.Instance, null);
-		returnTypeAttributes = this.GetReturnTypeCustomAttributes(invokeMethodDef);
-	}
+		// Get the "Invoke" method since delegates have an "Invoke" method with the parameters and the return type declared in the delegates, per ECMA-335
+		invokeMethodDefinition = typeDefinition.GetMethods().Select(WinMDReader.GetMethodDefinition).Single(def => WinMDReader.StringComparer.Equals(def.Name, "Invoke"));
 
-	private FunctionPointerTypeSyntax FunctionPointer(MethodDefinition methodDefinition, MethodSignature<TypeHandleInfo> signature)
-	{
-		FunctionPointerCallingConventionSyntax callingConventionSyntax = FunctionPointerCallingConvention(
-			Token(SyntaxKind.UnmanagedKeyword),
-			FunctionPointerUnmanagedCallingConventionList(SingletonSeparatedList(ToUnmanagedCallingConventionSyntax(CallingConvention.StdCall))));
-
-		FunctionPointerParameterListSyntax parametersList = FunctionPointerParameterList();
-
-		foreach (ParameterHandle parameterHandle in methodDefinition.GetParameters())
-		{
-			Parameter parameter = this.WinMDReader.GetParameter(parameterHandle);
-			if (parameter.SequenceNumber == 0)
-			{
-				continue;
-			}
-
-			TypeHandleInfo? parameterTypeInfo = signature.ParameterTypes[parameter.SequenceNumber - 1];
-			parametersList = parametersList.AddParameters(this.TranslateDelegateToFunctionPointer(parameterTypeInfo, parameter.GetCustomAttributes()));
-		}
-
-		parametersList = parametersList.AddParameters(this.TranslateDelegateToFunctionPointer(signature.ReturnType, this.GetReturnTypeCustomAttributes(methodDefinition)));
-
-		return FunctionPointerType(callingConventionSyntax, parametersList);
-	}
-
-	private FunctionPointerParameterSyntax TranslateDelegateToFunctionPointer(TypeHandleInfo parameterTypeInfo, CustomAttributeHandleCollection? customAttributeHandles)
-	{
-		if (this.IsDelegateReference(parameterTypeInfo, out QualifiedTypeDefinition delegateTypeDef))
-		{
-			return FunctionPointerParameter(delegateTypeDef.Generator.FunctionPointer(delegateTypeDef.Definition));
-		}
-
-		return FunctionPointerParameter(parameterTypeInfo.ToTypeSyntax(this._functionPointerTypeSettings, GeneratingElement.FunctionPointer, customAttributeHandles).GetUnmarshaledType());
+		// Get the parameters and the return type
+		signature = invokeMethodDefinition.DecodeSignature(SignatureHandleProvider.Instance, null);
+		returnTypeAttributes = GetReturnTypeCustomAttributes(invokeMethodDefinition);
 	}
 }

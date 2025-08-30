@@ -1234,9 +1234,11 @@ public partial class Generator : IGenerator, IDisposable
 			else if (WinMDReader.StringComparer.Equals(baseTypeName, nameof(MulticastDelegate)) && WinMDReader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
 			{
 				typeDeclaration =
-					IsUntypedDelegate(typeDef) ? DeclareUntypedDelegate(typeDef) :
-					_options.AllowMarshaling ? DeclareDelegate(typeDef) :
-					null;
+					IsUntypedDelegate(typeDef)
+						? CreateUntypedDelegateDeclaration(typeDef)
+						: _options.AllowMarshaling
+							? CreateTypedDelegateDeclaration(typeDef)
+							: null;
 			}
 			else
 			{

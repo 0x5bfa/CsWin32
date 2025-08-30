@@ -1,140 +1,133 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿// Copyright (c) 0x5BFA.
 
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 
-namespace CsWin32Ex
+namespace CsWin32Ex;
+
+public static class DiagnosticDescriptors
 {
-	public static class DiagnosticDescriptors
-	{
-		private const string InputProjectionErrorId = "PInvoke010";
-		private const string InputProjectionErrorTitle = "Input projection error";
+	private const string InputProjectionErrorId = "PInvoke010";
+	private const string InputProjectionErrorTitle = "Input projection error";
 
-		public static readonly DiagnosticDescriptor InternalError = new DiagnosticDescriptor(
-			"PInvoke000",
-			"CsWin32InternalError",
-			"An internal error occurred: {0}",
-			"Functionality",
-			DiagnosticSeverity.Error,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor InternalError = new(
+		"PInvoke000",
+		"CsWin32InternalError",
+		"An internal error occurred: {0}",
+		"Functionality",
+		DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor NoMatchingMethodOrType = new DiagnosticDescriptor(
-			"PInvoke001",
-			"No matching method, type or constant found",
-			"Method, type or constant \"{0}\" not found",
-			"Functionality",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor NoMatchingMethodOrType = new(
+		"PInvoke001",
+		"No matching method, type or constant found",
+		"Method, type or constant \"{0}\" not found",
+		"Functionality",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor NoMatchingMethodOrTypeWithBadCharacters = new DiagnosticDescriptor(
-			"PInvoke001",
-			"No matching method, type or constant found",
-			"Method, type or constant \"{0}\" not found. It contains unexpected characters, possibly including invisible characters, which can happen when copying and pasting from docs.microsoft.com among other places. Try deleting the line and retyping it.",
-			"Functionality",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor NoMatchingMethodOrTypeWithBadCharacters = new(
+		"PInvoke001",
+		"No matching method, type or constant found",
+		"Method, type or constant \"{0}\" not found. It contains unexpected characters, possibly including invisible characters, which can happen when copying and pasting from docs.microsoft.com among other places. Try deleting the line and retyping it.",
+		"Functionality",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor NoMatchingMethodOrTypeWithSuggestions = new DiagnosticDescriptor(
-			"PInvoke001",
-			"No matching method, type or constant found",
-#pragma warning disable RS1032 // end with a period
-			"Method, type or constant \"{0}\" not found. Did you mean {1}?",
-#pragma warning restore RS1032 // end with a period
-			"Functionality",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor NoMatchingMethodOrTypeWithSuggestions = new(
+		"PInvoke001",
+		"No matching method, type or constant found",
+		"Method, type or constant \"{0}\" not found. Did you mean {1}?",
+		"Functionality",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor NoMethodsForModule = new DiagnosticDescriptor(
-			"PInvoke001",
-			"No module found",
-			"No methods found under module \"{0}\"",
-			"Functionality",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor NoMethodsForModule = new(
+		"PInvoke001",
+		"No module found",
+		"No methods found under module \"{0}\"",
+		"Functionality",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor UnsafeCodeRequired = new DiagnosticDescriptor(
-			"PInvoke002",
-			"AllowUnsafeCode",
-			"AllowUnsafeBlocks must be set to 'true' in the project _memoryMappedFile for many APIs. Compiler errors may result.",
-			"Functionality",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true,
-			description: "Many generated types or P/Invoke methods require use of pointers, so the receiving compilation must allow unsafe code.");
+	public static readonly DiagnosticDescriptor UnsafeCodeRequired = new(
+		"PInvoke002",
+		"AllowUnsafeCode",
+		"AllowUnsafeBlocks must be set to 'true' in the project _memoryMappedFile for many APIs. Compiler errors may result.",
+		"Functionality",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true,
+		description: "Many generated types or P/Invoke methods require use of pointers, so the receiving compilation must allow unsafe code.");
 
-		public static readonly DiagnosticDescriptor BannedApi = new DiagnosticDescriptor(
-			"PInvoke003",
-			"BannedAPI",
-#pragma warning disable RS1032 // end with a period
-			"This API will not be generated. {0}",
-#pragma warning restore RS1032 // end with a period
-			"Functionality",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor BannedApi = new(
+		"PInvoke003",
+		"BannedAPI",
+		"This API will not be generated. {0}",
+		"Functionality",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor UseEnumValueDeclaringType = new DiagnosticDescriptor(
-			"PInvoke004",
-			"UseEnumDeclaringType",
-			"Use the name of the enum that declares this constant: {0}",
-			"Functionality",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true,
-			description: "Constants that are defined within enums should be generated by requesting the name of their declaring enum instead.");
+	public static readonly DiagnosticDescriptor UseEnumValueDeclaringType = new(
+		"PInvoke004",
+		"UseEnumDeclaringType",
+		"Use the name of the enum that declares this constant: {0}",
+		"Functionality",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true,
+		description: "Constants that are defined within enums should be generated by requesting the name of their declaring enum instead.");
 
-		public static readonly DiagnosticDescriptor CpuArchitectureIncompatibility = new DiagnosticDescriptor(
-			"PInvoke005",
-			"TargetSpecificCpuArchitecture",
-			"This API is only available when targeting a specific CPU architecture. AnyCPU cannot generate this API.",
-			"Functionality",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor CpuArchitectureIncompatibility = new(
+		"PInvoke005",
+		"TargetSpecificCpuArchitecture",
+		"This API is only available when targeting a specific CPU architecture. AnyCPU cannot generate this API.",
+		"Functionality",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor DocParsingError = new DiagnosticDescriptor(
-			"PInvoke006",
-			"DocsParseError",
-			"An error occurred while reading docs _memoryMappedFile: \"{0}\": {1}",
-			"Configuration",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor DocParsingError = new(
+		"PInvoke006",
+		"DocsParseError",
+		"An error occurred while reading docs _memoryMappedFile: \"{0}\": {1}",
+		"Configuration",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor AmbiguousMatchError = new DiagnosticDescriptor(
-			"PInvoke007",
-			"AmbiguousMatch",
-			"The API \"{0}\" is ambiguous",
-			"Functionality",
-			DiagnosticSeverity.Error,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor AmbiguousMatchError = new(
+		"PInvoke007",
+		"AmbiguousMatch",
+		"The API \"{0}\" is ambiguous",
+		"Functionality",
+		DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor AmbiguousMatchErrorWithSuggestions = new DiagnosticDescriptor(
-			"PInvoke007",
-			"AmbiguousMatch",
-			"The API \"{0}\" is ambiguous. Please specify one of: {1}.",
-			"Functionality",
-			DiagnosticSeverity.Error,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor AmbiguousMatchErrorWithSuggestions = new(
+		"PInvoke007",
+		"AmbiguousMatch",
+		"The API \"{0}\" is ambiguous. Please specify one of: {1}.",
+		"Functionality",
+		DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor OptionsParsingError = new DiagnosticDescriptor(
-			"PInvoke008",
-			"BadOptions",
-			"An error occurred while parsing \"{0}\": {1}",
-			"Configuration",
-			DiagnosticSeverity.Error,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor OptionsParsingError = new(
+		"PInvoke008",
+		"BadOptions",
+		"An error occurred while parsing \"{0}\": {1}",
+		"Configuration",
+		DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor MissingRecommendedReference = new(
-			"PInvoke009",
-			"Missing package reference",
-			"Missing reference to recommended package: \"{0}\"",
-			"Configuration",
-			DiagnosticSeverity.Warning,
-			isEnabledByDefault: true);
+	public static readonly DiagnosticDescriptor MissingRecommendedReference = new(
+		"PInvoke009",
+		"Missing package reference",
+		"Missing reference to recommended package: \"{0}\"",
+		"Configuration",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true);
 
-		public static readonly DiagnosticDescriptor NonUniqueMetadataInputs = new(
-			InputProjectionErrorId,
-			InputProjectionErrorTitle,
-			"The metadata projections input into CsWin32 must have unique names. The name \"{0}\" is used more than once.",
-			"Configuration",
-			DiagnosticSeverity.Error,
-			isEnabledByDefault: true);
-	}
+	public static readonly DiagnosticDescriptor NonUniqueMetadataInputs = new(
+		InputProjectionErrorId,
+		InputProjectionErrorTitle,
+		"The metadata projections input into CsWin32 must have unique names. The name \"{0}\" is used more than once.",
+		"Configuration",
+		DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
 }

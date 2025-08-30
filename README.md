@@ -12,11 +12,11 @@ The codebase has been greatly simplified: unnecessary files have been removed, a
 > dotnet add package CsWin32Ex --version 1.0.0
 ```
 
-## Authoring CsWin32(Ex)-compatible WinMD files
+## Authoring a CsWin32(Ex)-compatible WinMD
 
-When authoring a WinMD file for use with CsWin32 (or CsWin32Ex), ensure that you follow the requirements outlined below.
+When authoring a WinMD file for use with CsWin32 (or CsWin32Ex), note these following features of CsWin32(Ex) so the consumers can utilize the generated interop code more conveniently.
 
-### Supported architectures & OS platforms
+### Supported Architectures & OS Platforms
 
 To prevent the generator from generating a type that is not compatible with the current platforms and the OS platform configured in the project that consumes the generator and to report a diagnostic or an error for it, define a `SupportedArchitectureAttribute` & `SupportedOSPlatform` with an enum as its first parameter, and apply it to the type.
 
@@ -32,7 +32,9 @@ public enum Architecture
 }
 
 public class SupportedArchitectureAttribute(Architecture Architecture) : Attribute { }
+```
 
+```cs
 [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Interface | AttributeTargets.Method, AllowMultiple = false)]
 public class SupportedOSPlatformAttribute(string OSPlatform) : Attribute { }
 ```
@@ -44,7 +46,7 @@ public class SupportedOSPlatformAttribute(string OSPlatform) : Attribute { }
 public static extern IntPtr SetWindowLongPtrW(...);
 ```
 
-### Native handles
+### RAII for Native Handles
 
 To generate a proper dispose method for a native handle, define a `RAIIFreeAttribute` with the method name as its first parameter, and apply it to the structs representing native handles (the generator only checks for the attribute’s name; its origin does not matter).
 
@@ -61,7 +63,7 @@ public struct HANDLE
 }
 ```
 
-### Enum-associated constants
+### Enum-associated Constants
 
 To generate constants associated to an enum type, define `AssociatedConstantAttribute` with the const name as its first parameter, and apply it to the enum. The associated constants will be generated inside the enum and will not be generated as a constant.
 
@@ -78,5 +80,9 @@ public enum SERVICE_ERROR : uint
     // "SERVICE_NO_CHANGE = 4294967295U" will be generated
 }
 ```
+
+### Untyped Delegates
+
+Currently, there's no way to inform the generator that a delegate is untyped and should be generated as a struct with a method that calls `Marshal.GetDelegateForFunctionPointer<T>()`. This feature is limited to `PROC` and `FARPROC` only.
 
 _More coming soon._

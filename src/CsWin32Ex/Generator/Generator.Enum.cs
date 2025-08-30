@@ -10,7 +10,7 @@ public partial class Generator
 
 	private EnumDeclarationSyntax DeclareEnum(TypeDefinition typeDefinition)
 	{
-		// Get if the enum has the "FlagsAttribute"
+		// Get if the enum has the "[FlagsAttribute]"
 		bool isFlags = FindAttribute(typeDefinition.GetCustomAttributes(), nameof(System), nameof(FlagsAttribute)) is not null;
 
 		List<EnumMemberDeclarationSyntax> enumMemberDeclarationSyntaxCollection = [];
@@ -45,7 +45,7 @@ public partial class Generator
 			result = result.WithIdentifier(result.Identifier.WithTrailingTrivia(Space))
 				.WithBaseList(BaseList(SingletonSeparatedList<BaseTypeSyntax>(SimpleBaseType(enumBaseType).WithTrailingTrivia(LineFeed))).WithColonToken(TokenWithSpace(SyntaxKind.ColonToken)));
 
-		// If the enum is a flags enum, add the "FlagsAttribute"
+		// If the enum is a flags enum, add the "[FlagsAttribute]"
 		if (isFlags)
 			result = result.AddAttributeLists(AttributeList().WithCloseBracketToken(TokenWithLineFeed(SyntaxKind.CloseBracketToken)).AddAttributes(FlagsAttributeSyntax));
 
