@@ -1229,15 +1229,15 @@ public partial class Generator : IGenerator, IDisposable
 			else if (WinMDReader.StringComparer.Equals(baseTypeName, nameof(Enum)) && WinMDReader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
 			{
 				// Consider reusing .NET types like FILE_SHARE_FLAGS -> System.IO.FileShare
-				typeDeclaration = DeclareEnum(typeDef);
+				typeDeclaration = CreateEnumDeclarationSyntax(typeDef);
 			}
 			else if (WinMDReader.StringComparer.Equals(baseTypeName, nameof(MulticastDelegate)) && WinMDReader.StringComparer.Equals(baseTypeNamespace, nameof(System)))
 			{
 				typeDeclaration =
 					IsUntypedDelegate(typeDef)
-						? CreateUntypedDelegateDeclaration(typeDef)
+						? CreateUntypedDelegateDeclarationSyntax(typeDef)
 						: _options.AllowMarshaling
-							? CreateTypedDelegateDeclaration(typeDef)
+							? CreateTypedDelegateDeclarationSyntax(typeDef)
 							: null;
 			}
 			else

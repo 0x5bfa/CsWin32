@@ -8,7 +8,7 @@ public partial class Generator
 	public bool TryGetEnumName(string enumValueName, [NotNullWhen(true)] out string? declaringEnum)
 		=> WinMDIndexer.TryGetEnumName(WinMDReader, enumValueName, out declaringEnum);
 
-	private EnumDeclarationSyntax DeclareEnum(TypeDefinition typeDefinition)
+	private EnumDeclarationSyntax CreateEnumDeclarationSyntax(TypeDefinition typeDefinition)
 	{
 		// Get if the enum has the "[FlagsAttribute]"
 		bool isFlags = FindAttribute(typeDefinition.GetCustomAttributes(), nameof(System), nameof(FlagsAttribute)) is not null;

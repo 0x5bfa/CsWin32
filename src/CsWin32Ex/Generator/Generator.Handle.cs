@@ -6,10 +6,8 @@ public partial class Generator
 {
 	internal TypeSyntax? RequestSafeHandle(string releaseMethod)
 	{
-		if (!this._options.UseSafeHandles)
-		{
+		if (!_options.UseSafeHandles)
 			return null;
-		}
 
 		try
 		{

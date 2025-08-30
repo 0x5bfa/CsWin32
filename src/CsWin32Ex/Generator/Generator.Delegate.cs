@@ -8,10 +8,10 @@ public partial class Generator
 		=> reader.StringComparer.Equals(typeDef.Name, "PROC") || reader.StringComparer.Equals(typeDef.Name, "FARPROC");
 
 	/// <summary>Creates a delegate declaration syntax from a <see cref="TypeDefinition"/>.</summary>
-	/// <remarks>Creating a delegate when <see cref="GeneratorOptions.AllowMarshaling"/> is <see langword="true"/>.</remarks>
+	/// <remarks>Creating a delegate when <see cref="GeneratorOptions.AllowMarshaling"/> is <see langword="true"/> is not allowed; throws an exception.</remarks>
 	/// <param name="typeDefinition">The type to create a delegate syntax tree from.</param>
 	/// <returns>An instance of <see cref="DelegateDeclarationSyntax"/> that represents a delegate.</returns>
-	private DelegateDeclarationSyntax CreateTypedDelegateDeclaration(TypeDefinition typeDefinition)
+	private DelegateDeclarationSyntax CreateTypedDelegateDeclarationSyntax(TypeDefinition typeDefinition)
 	{
 		// Not expected but just in case
 		if (!_options.AllowMarshaling)
@@ -50,7 +50,7 @@ public partial class Generator
 	/// <summary>Creates a struct from an untyped delegate utilizing <see cref="Marshal.GetDelegateForFunctionPointer{TDelegate}(IntPtr)"/>.</summary>
 	/// <param name="typeDefinition">The type to create a struct syntax tree with the marshalled delegate from.</param>
 	/// <returns>An instance of <see cref="StructDeclarationSyntax"/> that represents a struct.</returns>
-	private StructDeclarationSyntax CreateUntypedDelegateDeclaration(TypeDefinition typeDefinition)
+	private StructDeclarationSyntax CreateUntypedDelegateDeclarationSyntax(TypeDefinition typeDefinition)
 	{
 		var typeName = IdentifierName(WinMDReader.GetString(typeDefinition.Name));
 		var valueFieldName = IdentifierName("Value");
