@@ -50,7 +50,7 @@ public partial class Generator
 			result = result.AddAttributeLists(AttributeList().WithCloseBracketToken(TokenWithLineFeed(SyntaxKind.CloseBracketToken)).AddAttributes(FlagsAttributeSyntax));
 
 		// Add its documentation if available
-		result = AddApiDocumentation(name, result);
+		result = AppendXmlCommentTo(name, result);
 
 		return result;
 	}

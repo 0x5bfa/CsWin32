@@ -245,7 +245,7 @@ public partial class Generator
 			.WithModifiers(structModifiers)
 			.AddAttributeLists(AttributeList().WithCloseBracketToken(TokenWithLineFeed(SyntaxKind.CloseBracketToken)).AddAttributes(DebuggerDisplay("{" + fieldName + "}")));
 
-		result = this.AddApiDocumentation(name.Identifier.ValueText, result);
+		result = this.AppendXmlCommentTo(name.Identifier.ValueText, result);
 		return result;
 	}
 

@@ -180,7 +180,7 @@ public partial class Generator : IGenerator, IDisposable
 	/// <param name="options">Options that influence the result of generation.</param>
 	/// <param name="compilation">The compilation that the generated code will be added to.</param>
 	/// <param name="parseOptions">The parse options that will be used for the generated code.</param>
-	public Generator(string winMDPath, Docs? apiDocs, IEnumerable<string> additionalAppLocalLibraries, GeneratorOptions options, CSharpCompilation? compilation = null, CSharpParseOptions? parseOptions = null)
+	public Generator(string winMDPath, ApiDocumentationProvider? apiDocs, IEnumerable<string> additionalAppLocalLibraries, GeneratorOptions options, CSharpCompilation? compilation = null, CSharpParseOptions? parseOptions = null)
 	{
 		// Initialize the WinMD reader and indexer.
 		WinMDFile winMDFile = WinMDFile.Create(winMDPath);
@@ -188,7 +188,7 @@ public partial class Generator : IGenerator, IDisposable
 		_winMDReaderRental = winMDFile.RentWinMDReader();
 
 		// Initialize the API docs
-		ApiDocs = apiDocs;
+		ApiDocumentationProvider = apiDocs;
 
 		// Initializes the native libraries along with the default native libraries that are allowed as app-local.
 		AppLocalLibraries = new(BuiltInAppLocalLibraries, StringComparer.OrdinalIgnoreCase);

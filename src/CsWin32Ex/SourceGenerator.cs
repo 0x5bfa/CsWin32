@@ -98,7 +98,7 @@ public class SourceGenerator : ISourceGenerator
 	private static IEnumerable<Generator>? CreateGeneratorsForEachWinMDFiles(GeneratorExecutionContext context, CSharpCompilation compilation, GeneratorOptions options)
 	{
 		IEnumerable<string> appLocalLibraries = CollectAppLocalAllowedLibraries(context);
-		Docs? docs = ParseDocs(context);
+		ApiDocumentationProvider? docs = ParseDocs(context);
 		var generators = GetAllWinMdFilePaths(context).Select(path => new Generator(path, docs, appLocalLibraries, options, compilation, (CSharpParseOptions)context.ParseOptions));
 		if (TryFindNonUniqueValue(generators, g => g.InputAssemblyName, StringComparer.OrdinalIgnoreCase, out (Generator Item, string Value) nonUniqueGenerator))
 		{
@@ -261,21 +261,21 @@ public class SourceGenerator : ISourceGenerator
 		}
 	}
 
-	private static Docs? ParseDocs(GeneratorExecutionContext context)
+	private static ApiDocumentationProvider? ParseDocs(GeneratorExecutionContext context)
 	{
-		Docs? docs = null;
+		ApiDocumentationProvider? docs = null;
 		if (context.AnalyzerConfigOptions.GlobalOptions.TryGetValue("build_property.CsWin32InputDocPaths", out string? delimitedApiDocsPaths) &&
 			!string.IsNullOrWhiteSpace(delimitedApiDocsPaths))
 		{
 			string[] apiDocsPaths = delimitedApiDocsPaths!.Split('|');
 			if (apiDocsPaths.Length > 0)
 			{
-				List<Docs> docsList = new(apiDocsPaths.Length);
+				List<ApiDocumentationProvider> docsList = new(apiDocsPaths.Length);
 				foreach (string path in apiDocsPaths)
 				{
 					try
 					{
-						docsList.Add(Docs.Get(path));
+						docsList.Add(ApiDocumentationProvider.Get(path));
 					}
 					catch (Exception e)
 					{
@@ -283,7 +283,7 @@ public class SourceGenerator : ISourceGenerator
 					}
 				}
 
-				docs = Docs.Merge(docsList);
+				docs = ApiDocumentationProvider.Merge(docsList);
 			}
 		}
 

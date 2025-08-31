@@ -483,7 +483,7 @@ public partial class Generator
 			if (propertyOrMethod is not null)
 			{
 				// Add documentation if we can find it.
-				propertyOrMethod = this.AddApiDocumentation($"{ifaceName}.{methodName}", propertyOrMethod);
+				propertyOrMethod = this.AppendXmlCommentTo($"{ifaceName}.{methodName}", propertyOrMethod);
 				members.Add(propertyOrMethod);
 			}
 		}
@@ -726,7 +726,7 @@ public partial class Generator
 				}
 
 				// Add documentation if we can find it.
-				propertyOrMethod = this.AddApiDocumentation($"{ifaceName}.{methodName}", propertyOrMethod);
+				propertyOrMethod = this.AppendXmlCommentTo($"{ifaceName}.{methodName}", propertyOrMethod);
 				members.Add(propertyOrMethod);
 
 				if (methodDeclaration is not null)
@@ -1069,7 +1069,7 @@ public partial class Generator
 			.WithModifiers(classModifiers)
 			.AddAttributeLists(AttributeList().AddAttributes(GUID(guid), ComImportAttributeSyntax));
 
-		result = this.AddApiDocumentation(name.Identifier.ValueText, result);
+		result = this.AppendXmlCommentTo(name.Identifier.ValueText, result);
 		return result;
 	}
 }

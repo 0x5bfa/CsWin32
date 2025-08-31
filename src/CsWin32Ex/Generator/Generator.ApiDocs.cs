@@ -4,221 +4,121 @@ namespace CsWin32Ex;
 
 public partial class Generator
 {
-	internal Docs? ApiDocs { get; }
+	internal ApiDocumentationProvider? ApiDocumentationProvider { get; }
 
-	private T AddApiDocumentation<T>(string api, T memberDeclaration)
-		where T : MemberDeclarationSyntax
+	private T AppendXmlCommentTo<T>(string typeName, T memberDeclaration) where T : MemberDeclarationSyntax
 	{
-		if (this.ApiDocs is object && this.ApiDocs.TryGetApiDocs(api, out ApiDetails? docs))
-		{
-			var docCommentsBuilder = new StringBuilder();
-			if (docs.Description is object)
-			{
-				docCommentsBuilder.Append($@"/// <summary>");
-				EmitDoc(docs.Description, docCommentsBuilder, docs, string.Empty);
-				docCommentsBuilder.AppendLine("</summary>");
-			}
+		// If there's no documentation on this API, return the member declaration as-is
+		if (ApiDocumentationProvider is null || !ApiDocumentationProvider.TryGetApiDocs(typeName, out var docs))
+			return memberDeclaration;
 
-			if (docs.Parameters is object)
+		var xmlCommentBuilder = new XmlCommentBuilder();
+
+		// Add the <summary> element
+		if (docs.Description is not null)
+		{
+			xmlCommentBuilder
+				.StartSummaryElement()
+				.AppendParagraphs(docs.Description)
+				.EndSummaryElement();
+		}
+
+		// Add the <param> elements
+		if (docs.Parameters is not null && memberDeclaration is BaseMethodDeclarationSyntax methodDeclaration)
+		{
+			foreach (KeyValuePair<string, string> entry in docs.Parameters)
 			{
-				if (memberDeclaration is BaseMethodDeclarationSyntax methodDecl)
-				{
-					foreach (KeyValuePair<string, string> entry in docs.Parameters)
+				// Skip documentation for parameters that do not actually exist on the method.
+				if (!methodDeclaration.ParameterList.Parameters.Any(p => string.Equals(p.Identifier.ValueText, entry.Key, StringComparison.Ordinal)))
+					continue;
+
+				xmlCommentBuilder
+					.StartParamElement(entry.Key)
+					.AppendParagraphs(entry.Value)
+					.AppendToLearnMoreVisitLinkText(docs.HelpLink, "parameters")
+					.EndParamElement();
+			}
+		}
+
+		// Add the <returns> element
+		if (docs.ReturnValue is not null)
+		{
+			xmlCommentBuilder
+				.StartReturnsElement()
+				.AppendParagraphs(docs.ReturnValue)
+				.AppendToLearnMoreVisitLinkText(docs.HelpLink, "return-value")
+				.EndReturnsElement();
+		}
+
+		// Add the <remarks> element
+		if (docs.Remarks is not null || docs.HelpLink is not null)
+		{
+			xmlCommentBuilder.StartRemarksElement();
+
+			if (docs.Remarks is not null)
+				xmlCommentBuilder.AppendParagraphs(docs.Remarks);
+			if (docs.HelpLink is not null)
+				xmlCommentBuilder.AppendToLearnMoreVisitLinkText(docs.HelpLink, "remarks");
+
+			xmlCommentBuilder.EndRemarksElement();
+		}
+
+		// If this type is a struct or an enum, add XML comments to its members too
+		if (docs.Fields is not null)
+		{
+			var xmlCommentBuilderForField = new XmlCommentBuilder();
+
+			if (memberDeclaration is StructDeclarationSyntax structDeclaration)
+			{
+				memberDeclaration = memberDeclaration.ReplaceNodes(
+					structDeclaration.Members.OfType<FieldDeclarationSyntax>(),
+					(_, field) =>
 					{
-						if (!methodDecl.ParameterList.Parameters.Any(p => string.Equals(p.Identifier.ValueText, entry.Key, StringComparison.Ordinal)))
+						VariableDeclaratorSyntax? variable = field.Declaration.Variables.Single();
+						if (docs.Fields.TryGetValue(variable.Identifier.ValueText, out string? fieldSummary))
 						{
-							// Skip documentation for parameters that do not actually exist on the method.
-							continue;
+							xmlCommentBuilderForField.StartSummaryElement()
+								.AppendParagraphs(fieldSummary)
+								.AppendToLearnMoreVisitLinkText(docs.HelpLink, "members")
+								.EndSummaryElement();
+
+							if (field.Declaration.Type.HasAnnotations(OriginalDelegateAnnotation) &&
+								field.Declaration.Type.GetAnnotations(OriginalDelegateAnnotation).Single().Data?.ToString() is { } originalDelegateDefinitionDocsUrl)
+								xmlCommentBuilderForField.AppendLine($"/// <remarks>See the <see cref=\"{originalDelegateDefinitionDocsUrl}\" /> delegate for more about this struct.</remarks>");
+
+							field = field.WithLeadingTrivia(ParseLeadingTrivia(xmlCommentBuilderForField.ToString()));
+							xmlCommentBuilderForField.Clear();
 						}
 
-						docCommentsBuilder.Append($@"/// <param name=""{entry.Key}"">");
-						EmitDoc(entry.Value, docCommentsBuilder, docs, "parameters");
-						docCommentsBuilder.AppendLine("</param>");
-					}
-				}
+						return field;
+					});
 			}
-
-			if (docs.Fields is object)
+			else if (memberDeclaration is EnumDeclarationSyntax enumDeclaration)
 			{
-				var fieldsDocBuilder = new StringBuilder();
-				switch (memberDeclaration)
-				{
-					case StructDeclarationSyntax structDeclaration:
-						memberDeclaration = memberDeclaration.ReplaceNodes(
-							structDeclaration.Members.OfType<FieldDeclarationSyntax>(),
-							(_, field) =>
-							{
-								VariableDeclaratorSyntax? variable = field.Declaration.Variables.Single();
-								if (docs.Fields.TryGetValue(variable.Identifier.ValueText, out string? fieldDoc))
-								{
-									fieldsDocBuilder.Append("/// <summary>");
-									EmitDoc(fieldDoc, fieldsDocBuilder, docs, "members");
-									fieldsDocBuilder.AppendLine("</summary>");
-									if (field.Declaration.Type.HasAnnotations(OriginalDelegateAnnotation))
-									{
-										fieldsDocBuilder.AppendLine(@$"/// <remarks>See the <see cref=""{field.Declaration.Type.GetAnnotations(OriginalDelegateAnnotation).Single().Data}"" /> delegate for more about this function.</remarks>");
-									}
+				memberDeclaration = memberDeclaration.ReplaceNodes(
+					enumDeclaration.Members,
+					(_, field) =>
+					{
+						if (docs.Fields.TryGetValue(field.Identifier.ValueText, out string? fieldSummary))
+						{
+							xmlCommentBuilderForField.StartSummaryElement()
+								.AppendParagraphs(fieldSummary)
+								.AppendToLearnMoreVisitLinkText(docs.HelpLink, "members")
+								.EndSummaryElement();
 
-									field = field.WithLeadingTrivia(ParseLeadingTrivia(fieldsDocBuilder.ToString().Replace("\r\n", "\n")));
-									fieldsDocBuilder.Clear();
-								}
+							field = field.WithLeadingTrivia(ParseLeadingTrivia(xmlCommentBuilderForField.ToString()));
+							xmlCommentBuilderForField.Clear();
+						}
 
-								return field;
-							});
-						break;
-					case EnumDeclarationSyntax enumDeclaration:
-						memberDeclaration = memberDeclaration.ReplaceNodes(
-							enumDeclaration.Members,
-							(_, field) =>
-							{
-								if (docs.Fields.TryGetValue(field.Identifier.ValueText, out string? fieldDoc))
-								{
-									fieldsDocBuilder.Append($@"/// <summary>");
-									EmitDoc(fieldDoc, fieldsDocBuilder, docs, "members");
-									fieldsDocBuilder.AppendLine("</summary>");
-									field = field.WithLeadingTrivia(ParseLeadingTrivia(fieldsDocBuilder.ToString().Replace("\r\n", "\n")));
-									fieldsDocBuilder.Clear();
-								}
-
-								return field;
-							});
-						break;
-				}
+						return field;
+					});
 			}
-
-			if (docs.ReturnValue is object)
-			{
-				docCommentsBuilder.Append("/// <returns>");
-				EmitDoc(docs.ReturnValue, docCommentsBuilder, docs: null, string.Empty);
-				docCommentsBuilder.AppendLine("</returns>");
-			}
-
-			if (docs.Remarks is object || docs.HelpLink is object)
-			{
-				docCommentsBuilder.Append($"/// <remarks>");
-				if (docs.Remarks is object)
-				{
-					EmitDoc(docs.Remarks, docCommentsBuilder, docs, string.Empty);
-				}
-				else if (docs.HelpLink is object)
-				{
-					docCommentsBuilder.AppendLine();
-					docCommentsBuilder.AppendLine($@"/// <para><see href=""{docs.HelpLink}"">Learn more about this API from docs.microsoft.com</see>.</para>");
-					docCommentsBuilder.Append("/// ");
-				}
-
-				docCommentsBuilder.AppendLine($"</remarks>");
-			}
-
-			memberDeclaration = memberDeclaration.WithLeadingTrivia(
-				ParseLeadingTrivia(docCommentsBuilder.ToString().Replace("\r\n", "\n")));
 		}
+
+		// Parse the constructed XML comment into a leading trivia and append it to the member declaration
+		memberDeclaration = memberDeclaration.WithLeadingTrivia(ParseLeadingTrivia(xmlCommentBuilder.ToString()));
+		xmlCommentBuilder.Clear();
 
 		return memberDeclaration;
-
-		static void EmitLine(StringBuilder stringBuilder, string yamlDocSrc)
-		{
-			stringBuilder.Append(yamlDocSrc.Trim());
-		}
-
-		static void EmitDoc(string yamlDocSrc, StringBuilder docCommentsBuilder, ApiDetails? docs, string docsAnchor)
-		{
-			if (yamlDocSrc.Contains('\n'))
-			{
-				docCommentsBuilder.AppendLine();
-				var docReader = new StringReader(yamlDocSrc);
-				string? paramDocLine;
-
-				bool inParagraph = false;
-				bool inComment = false;
-				int blankLineCounter = 0;
-				while ((paramDocLine = docReader.ReadLine()) is object)
-				{
-					if (string.IsNullOrWhiteSpace(paramDocLine))
-					{
-						if (++blankLineCounter >= 2 && inParagraph)
-						{
-							docCommentsBuilder.AppendLine("</para>");
-							inParagraph = false;
-							inComment = false;
-						}
-
-						continue;
-					}
-					else if (blankLineCounter > 0)
-					{
-						blankLineCounter = 0;
-					}
-					else if (docCommentsBuilder.Length > 0 && docCommentsBuilder[docCommentsBuilder.Length - 1] != '\n')
-					{
-						docCommentsBuilder.Append(' ');
-					}
-
-					if (inParagraph)
-					{
-						if (docCommentsBuilder.Length > 0 && docCommentsBuilder[docCommentsBuilder.Length - 1] is not (' ' or '\n'))
-						{
-							docCommentsBuilder.Append(' ');
-						}
-					}
-					else
-					{
-						docCommentsBuilder.Append("/// <para>");
-						inParagraph = true;
-						inComment = true;
-					}
-
-					if (!inComment)
-					{
-						docCommentsBuilder.Append("/// ");
-					}
-
-					if (paramDocLine.IndexOf("<table", StringComparison.OrdinalIgnoreCase) >= 0 ||
-						paramDocLine.IndexOf("<img", StringComparison.OrdinalIgnoreCase) >= 0 ||
-						paramDocLine.IndexOf("<ul", StringComparison.OrdinalIgnoreCase) >= 0 ||
-						paramDocLine.IndexOf("<ol", StringComparison.OrdinalIgnoreCase) >= 0 ||
-						paramDocLine.IndexOf("```", StringComparison.OrdinalIgnoreCase) >= 0 ||
-						paramDocLine.IndexOf("<<", StringComparison.OrdinalIgnoreCase) >= 0)
-					{
-						// We don't try to format tables, so truncate at this point.
-						if (inParagraph)
-						{
-							docCommentsBuilder.AppendLine("</para>");
-							inParagraph = false;
-							inComment = false;
-						}
-
-						docCommentsBuilder.AppendLine($@"/// <para>This doc was truncated.</para>");
-
-						break; // is this the right way?
-					}
-
-					EmitLine(docCommentsBuilder, paramDocLine);
-				}
-
-				if (inParagraph)
-				{
-					if (!inComment)
-					{
-						docCommentsBuilder.Append("/// ");
-					}
-
-					docCommentsBuilder.AppendLine("</para>");
-					inParagraph = false;
-					inComment = false;
-				}
-
-				if (docs is object)
-				{
-					docCommentsBuilder.AppendLine($@"/// <para><see href=""{docs.HelpLink}#{docsAnchor}"">Read more on docs.microsoft.com</see>.</para>");
-				}
-
-				docCommentsBuilder.Append("/// ");
-			}
-			else
-			{
-				EmitLine(docCommentsBuilder, yamlDocSrc);
-			}
-		}
 	}
 }

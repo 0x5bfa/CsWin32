@@ -404,7 +404,7 @@ public partial class Generator
 				VariableDeclarator(Identifier(name)).WithInitializer(EqualsValueClause(value))))
 				.WithModifiers(modifiers);
 			result = fieldType.AddMarshalAs(result);
-			result = this.AddApiDocumentation(result.Declaration.Variables[0].Identifier.ValueText, result);
+			result = this.AppendXmlCommentTo(result.Declaration.Variables[0].Identifier.ValueText, result);
 
 			return result;
 		}

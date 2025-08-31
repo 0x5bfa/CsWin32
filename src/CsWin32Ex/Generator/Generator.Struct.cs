@@ -416,7 +416,7 @@ public partial class Generator
 			result = result.AddAttributeLists(AttributeList().AddAttributes(GUID(guid)));
 		}
 
-		result = this.AddApiDocumentation(name.Identifier.ValueText, result);
+		result = this.AppendXmlCommentTo(name.Identifier.ValueText, result);
 
 		return result;
 	}

@@ -352,7 +352,7 @@ public partial class Generator
 			}
 
 			// Add documentation if we can find it.
-			exposedMethod = this.AddApiDocumentation(entrypoint ?? methodName, exposedMethod);
+			exposedMethod = this.AppendXmlCommentTo(entrypoint ?? methodName, exposedMethod);
 
 			this._volatileCode.AddMemberToModule(moduleName, this.DeclareFriendlyOverloads(methodDefinition, exposedMethod, this._methodsAndConstantsClassName, FriendlyOverloadOf.ExternMethod, this._injectedPInvokeHelperMethods));
 			this._volatileCode.AddMemberToModule(moduleName, exposedMethod);
