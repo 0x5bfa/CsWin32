@@ -69,18 +69,18 @@ public partial class Generator
 		"PZZWSTR",
 	};
 
-	private const string SystemRuntimeCompilerServices = "System.Runtime.CompilerServices";
-	private const string SystemRuntimeInteropServices = "System.Runtime.InteropServices";
-	private const string NativeTypedefAttribute = "NativeTypedefAttribute";
-	private const string MetadataTypedefAttribute = "MetadataTypedefAttribute";
-	private const string AlsoUsableForAttribute = "AlsoUsableForAttribute";
-	private const string InvalidHandleValueAttribute = "InvalidHandleValueAttribute";
-	private const string CanReturnMultipleSuccessValuesAttribute = "CanReturnMultipleSuccessValuesAttribute";
-	private const string FlexibleArrayAttribute = "FlexibleArrayAttribute";
-	private const string CanReturnErrorsAsSuccessAttribute = "CanReturnErrorsAsSuccessAttribute";
-	private const string SimpleFileNameAnnotation = "SimpleFileName";
-	private const string NamespaceContainerAnnotation = "NamespaceContainer";
-	private const string OriginalDelegateAnnotation = "OriginalDelegate";
+	internal const string SystemRuntimeCompilerServices = "System.Runtime.CompilerServices";
+	internal const string SystemRuntimeInteropServices = "System.Runtime.InteropServices";
+	internal const string NativeTypedefAttribute = "NativeTypedefAttribute";
+	internal const string MetadataTypedefAttribute = "MetadataTypedefAttribute";
+	internal const string AlsoUsableForAttribute = "AlsoUsableForAttribute";
+	internal const string InvalidHandleValueAttribute = "InvalidHandleValueAttribute";
+	internal const string CanReturnMultipleSuccessValuesAttribute = "CanReturnMultipleSuccessValuesAttribute";
+	internal const string FlexibleArrayAttribute = "FlexibleArrayAttribute";
+	internal const string CanReturnErrorsAsSuccessAttribute = "CanReturnErrorsAsSuccessAttribute";
+	internal const string SimpleFileNameAnnotation = "SimpleFileName";
+	internal const string NamespaceContainerAnnotation = "NamespaceContainer";
+	internal const string OriginalDelegateAnnotation = "OriginalDelegate";
 
 	private static readonly Dictionary<string, MethodDeclarationSyntax> PInvokeHelperMethods;
 	private static readonly InterfaceDeclarationSyntax IVTableInterface;

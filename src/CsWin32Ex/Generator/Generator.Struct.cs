@@ -14,163 +14,176 @@ public partial class Generator
 		_ => throw new NotSupportedException($"Unsupported primitive type code: {code}"),
 	};
 
-	private StructDeclarationSyntax DeclareStruct(TypeDefinitionHandle typeDefHandle, Context context)
+	private StructDeclarationSyntax CreateStructDeclaration(TypeDefinitionHandle typeDefinitionHandle, Context context)
 	{
-		TypeDefinition typeDef = this.WinMDReader.GetTypeDefinition(typeDefHandle);
-		bool isManagedType = this.IsManagedType(typeDefHandle);
-		IdentifierNameSyntax name = IdentifierName(this.GetMangledIdentifier(this.WinMDReader.GetString(typeDef.Name), context.AllowMarshaling, isManagedType));
-		bool explicitLayout = (typeDef.Attributes & TypeAttributes.ExplicitLayout) == TypeAttributes.ExplicitLayout;
+		var typeDefinition = WinMDReader.GetTypeDefinition(typeDefinitionHandle);
+		var isManagedType = IsManagedType(typeDefinitionHandle);
+		var identifierNameSyntax = IdentifierName(GetMangledIdentifier(WinMDReader.GetString(typeDefinition.Name), context.AllowMarshaling, isManagedType));
+
+		var explicitLayout = StructHelpers.HasTypeAttributesOf(typeDefinition, TypeAttributes.ExplicitLayout);
 		if (explicitLayout)
-		{
 			context = context with { AllowMarshaling = false };
-		}
 
-		// If the last field has the [FlexibleArray] attribute, we must disable marshaling since the struct
-		// is only ever valid when accessed via a pointer since the struct acts as a header of an arbitrarily-sized array.
-		FieldDefinitionHandle flexibleArrayFieldHandle = default;
+		// Disable marshalling when the last field has the [FlexibleArrayAttribute]. The struct is only ever valid
+		// when accessed via a pointer, since the struct acts as a header of an arbitrarily-sized array.
+		if (StructHelpers.TryGetFlexibleArrayField(typeDefinition, WinMDReader, out var flexibleArrayFieldDefinitionHandle))
+			context = context with { AllowMarshaling = false };
+
 		MethodDeclarationSyntax? sizeOfMethod = null;
-		if (typeDef.GetFields().LastOrDefault() is FieldDefinitionHandle { IsNil: false } lastFieldHandle)
-		{
-			FieldDefinition lastField = this.WinMDReader.GetFieldDefinition(lastFieldHandle);
-			if (WinMDFileHelper.TryGetAttributeOn(this.WinMDReader, lastField.GetCustomAttributes(), InteropDecorationNamespace, FlexibleArrayAttribute) is not null)
-			{
-				flexibleArrayFieldHandle = lastFieldHandle;
-				context = context with { AllowMarshaling = false };
-			}
-		}
-
-		TypeSyntaxSettings typeSettings = context.Filter(this._fieldTypeSettings);
-
+		TypeSyntaxSettings typeSettings = context.Filter(_fieldTypeSettings);
 		bool hasUtf16CharField = false;
 		var members = new List<MemberDeclarationSyntax>();
 		SyntaxList<MemberDeclarationSyntax> additionalMembers = default;
-		foreach (FieldDefinitionHandle fieldDefHandle in typeDef.GetFields())
-		{
-			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
-			FieldDeclarationSyntax field;
 
-			if (fieldDef.Attributes.HasFlag(FieldAttributes.Static))
+		foreach (FieldDefinitionHandle fieldDefinitionHandle in typeDefinition.GetFields())
+		{
+			var fieldDefinition = WinMDReader.GetFieldDefinition(fieldDefinitionHandle);
+			FieldDeclarationSyntax fieldDeclarationSyntax;
+
+			if (StructHelpers.IsConstField(fieldDefinition))
 			{
-				if (fieldDef.Attributes.HasFlag(FieldAttributes.Literal))
-				{
-					field = this.DeclareConstant(fieldDef);
-					members.Add(field);
-					continue;
-				}
-				else
-				{
-					throw new NotSupportedException();
-				}
+				fieldDeclarationSyntax = CreateConstantDeclaration(fieldDefinition);
+				members.Add(fieldDeclarationSyntax);
+				continue;
+			}
+			else if (StructHelpers.IsStaticField(fieldDefinition))
+			{
+				throw new NotSupportedException();
 			}
 
-			string fieldName = this.WinMDReader.GetString(fieldDef.Name);
+			string fieldName = WinMDReader.GetString(fieldDefinition.Name);
 
 			try
 			{
-				CustomAttribute? fixedBufferAttribute = this.FindAttribute(fieldDef.GetCustomAttributes(), SystemRuntimeCompilerServices, nameof(FixedBufferAttribute));
+				var fieldCustomAttributes = fieldDefinition.GetCustomAttributes();
+				var fieldDeclarator = VariableDeclarator(SafeIdentifier(fieldName));
 
-				VariableDeclaratorSyntax fieldDeclarator = VariableDeclarator(SafeIdentifier(fieldName));
-				if (fixedBufferAttribute.HasValue)
+				// Check if the field has "fixed" keyword
+				if (StructHelpers.HasCustomAttributeOf(fieldCustomAttributes, WinMDReader, SystemRuntimeCompilerServices, nameof(FixedBufferAttribute), out var customAttribute))
 				{
-					CustomAttributeValue<TypeSyntax> attributeArgs = fixedBufferAttribute.Value.DecodeValue(CustomAttributeTypeProvider.Instance);
-					var fieldType = (TypeSyntax)attributeArgs.FixedArguments[0].Value!;
-					ExpressionSyntax size = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal((int)attributeArgs.FixedArguments[1].Value!));
-					field = FieldDeclaration(
-						VariableDeclaration(fieldType))
-						.AddDeclarationVariables(
-							fieldDeclarator
-								.WithArgumentList(BracketedArgumentList(SingletonSeparatedList(Argument(size)))))
-						.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword), Token(SyntaxKind.FixedKeyword));
-				}
-				else if (fieldDefHandle == flexibleArrayFieldHandle)
-				{
-					CustomAttributeHandleCollection fieldAttributes = fieldDef.GetCustomAttributes();
-					var fieldTypeInfo = (ArrayTypeHandleInfo)fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null);
-					TypeSyntax fieldType = fieldTypeInfo.ElementType.ToTypeSyntax(typeSettings, GeneratingElement.StructMember, fieldAttributes).Type;
-
-					if (fieldType is PointerTypeSyntax or FunctionPointerTypeSyntax)
+					if (customAttribute is { } fixedBufferAttribute &&
+						fixedBufferAttribute.DecodeValue(CustomAttributeTypeProvider.Instance) is { } fixedBufferAttributeArguments &&
+						fixedBufferAttributeArguments.FixedArguments.Length is 2 &&
+						fixedBufferAttributeArguments.FixedArguments[0].Value is TypeSyntax fieldTypeSyntax &&
+						fixedBufferAttributeArguments.FixedArguments[1].Value is int fieldArraySizeSyntax &&
+						LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(fieldArraySizeSyntax)) is ExpressionSyntax arraySizeExpressionSyntax)
 					{
-						// These types are not allowed as generic type arguments (https://github.com/dotnet/runtime/issues/13627)
-						// so we have to generate a special nested struct dedicated to this type instead of using the generic type.
-						StructDeclarationSyntax helperStruct = this.DeclareVariableLengthInlineArrayHelper(context, fieldType);
-						additionalMembers = additionalMembers.Add(helperStruct);
-
-						field = FieldDeclaration(
-							VariableDeclaration(IdentifierName(helperStruct.Identifier.ValueText)))
-							.AddDeclarationVariables(fieldDeclarator)
-							.AddModifiers(TokenWithSpace(this.Visibility));
-					}
-					else if (fieldType is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.CharKeyword })
-					{
-						// If the field is a char, we need to use a helper struct to avoid marshaling issues
-						// because although C# considered char to be "unmanaged", .NET Framework considers it non-blittable.
-						this.RequestVariableLengthInlineArrayHelper2(context);
-						field = FieldDeclaration(
-							VariableDeclaration(
-								GenericName($"global::Windows.Win32.VariableLengthInlineArray")
-								.WithTypeArgumentList(TypeArgumentList().AddArguments(fieldType, PredefinedType(Token(SyntaxKind.UShortKeyword))))))
-							.AddDeclarationVariables(fieldDeclarator)
-							.AddModifiers(TokenWithSpace(this.Visibility));
+						//   internal unsafe fixed char Name[32];
+						// Becomes:
+						//   [StructLayout(LayoutKind.Sequential, Size = 64), CompilerGenerated, UnsafeValueType]
+						//   public struct <StandardName>e__FixedBuffer { public char FixedElementField; }
+						//   [FixedBuffer(typeof(char), 32)]
+						//   internal <StandardName>e__FixedBuffer StandardName;
+						// So, we need to revert it back to the original form.
+						fieldDeclarationSyntax = FieldDeclaration(
+							VariableDeclaration(fieldTypeSyntax))
+							.AddDeclarationVariables(
+								fieldDeclarator
+									.WithArgumentList(BracketedArgumentList(SingletonSeparatedList(Argument(arraySizeExpressionSyntax)))))
+							.AddModifiers(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword), Token(SyntaxKind.FixedKeyword));
 					}
 					else
 					{
-						this.RequestVariableLengthInlineArrayHelper1(context);
-						field = FieldDeclaration(
-							VariableDeclaration(
-								GenericName($"global::Windows.Win32.VariableLengthInlineArray")
-								.WithTypeArgumentList(TypeArgumentList().AddArguments(fieldType))))
-							.AddDeclarationVariables(fieldDeclarator)
-							.AddModifiers(TokenWithSpace(this.Visibility));
+						throw new InvalidOperationException("The fixed keyword is not correctly interpreted.");
+					}
+				}
+				// Check if the field has "[FlexibleArrayAttribute]" and generate a helper struct for a variable-length inline array, if any
+				else if (fieldDefinitionHandle == flexibleArrayFieldDefinitionHandle)
+				{
+					if (fieldDefinition.DecodeSignature(SignatureHandleProvider.Instance, null) is ArrayTypeHandleInfo fieldTypeInfo &&
+						fieldTypeInfo.ElementType.ToTypeSyntax(typeSettings, GeneratingElement.StructMember, fieldCustomAttributes).Type is { } fieldTypeSyntax)
+					{
+						// If the field is a pointer or a function pointer, declare as-is
+						// since the helper struct takes a generic type argument but these types aren't supported
+						// For more information, see https://github.com/dotnet/runtime/issues/13627
+						if (fieldTypeSyntax is PointerTypeSyntax or FunctionPointerTypeSyntax)
+						{
+							var variableLengthInlineHelperStructDeclarationSyntax = DeclareVariableLengthInlineArrayHelper(context, fieldTypeSyntax);
+							additionalMembers = additionalMembers.Add(variableLengthInlineHelperStructDeclarationSyntax);
+
+							fieldDeclarationSyntax = FieldDeclaration(
+								VariableDeclaration(IdentifierName(variableLengthInlineHelperStructDeclarationSyntax.Identifier.ValueText)))
+									.AddDeclarationVariables(fieldDeclarator)
+									.AddModifiers(TokenWithSpace(Visibility));
+						}
+						// If the type of the field is "System.Char", generate a helper struct since it is not blittable
+						else if (fieldTypeSyntax is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.CharKeyword })
+						{
+							// "internal VariableLengthInlineArray<char, ushort> fieldName;"
+							RequestVariableLengthInlineArrayHelper2(context);
+							fieldDeclarationSyntax = FieldDeclaration(
+								VariableDeclaration(
+									GenericName($"global::Windows.Win32.VariableLengthInlineArray")
+										.WithTypeArgumentList(TypeArgumentList().AddArguments(fieldTypeSyntax, PredefinedType(Token(SyntaxKind.UShortKeyword))))))
+									.AddDeclarationVariables(fieldDeclarator)
+									.AddModifiers(TokenWithSpace(Visibility));
+						}
+						else
+						{
+							// "internal VariableLengthInlineArrayHelper fieldName;"
+							RequestVariableLengthInlineArrayHelper1(context);
+							fieldDeclarationSyntax = FieldDeclaration(
+								VariableDeclaration(
+									GenericName($"global::Windows.Win32.VariableLengthInlineArray")
+									.WithTypeArgumentList(TypeArgumentList().AddArguments(fieldTypeSyntax))))
+								.AddDeclarationVariables(fieldDeclarator)
+								.AddModifiers(TokenWithSpace(Visibility));
+						}
+
+						// "internal static unsafe int SizeOf(int count) { }"
+						sizeOfMethod = CreateFlexibleArraySizeOfMethodDeclaration(identifierNameSyntax, fieldTypeSyntax, typeSettings);
+					}
+					else
+					{
+						throw new InvalidOperationException("The FlexibleArrayAttribute is not correctly interpreted.");
 					}
 
-					sizeOfMethod = this.DeclareSizeOfMethod(name, fieldType, typeSettings);
 				}
 				else
 				{
-					CustomAttributeHandleCollection fieldAttributes = fieldDef.GetCustomAttributes();
-					TypeHandleInfo fieldTypeInfo = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null);
+					var fieldTypeInfo = fieldDefinition.DecodeSignature(SignatureHandleProvider.Instance, null);
 					hasUtf16CharField |= fieldTypeInfo is PrimitiveTypeHandleInfo { PrimitiveTypeCode: PrimitiveTypeCode.Char };
-					TypeSyntaxSettings thisFieldTypeSettings = typeSettings;
+					var thisFieldTypeSettings = typeSettings;
 
 					// Do not qualify names of a type nested inside *this* struct, since this struct may or may not have a mangled name.
-					if (thisFieldTypeSettings.QualifyNames && fieldTypeInfo is HandleTypeHandleInfo fieldHandleTypeInfo && this.IsNestedType(fieldHandleTypeInfo.Handle))
+					if (thisFieldTypeSettings.QualifyNames &&
+						fieldTypeInfo is HandleTypeHandleInfo fieldHandleTypeInfo &&
+						IsNestedType(fieldHandleTypeInfo.Handle) &&
+						fieldHandleTypeInfo.Handle.Kind is HandleKind.TypeReference &&
+						TryGetTypeDefHandle((TypeReferenceHandle)fieldHandleTypeInfo.Handle, out QualifiedTypeDefinitionHandle fieldTypeDefinitionHandle) &&
+						fieldTypeDefinitionHandle.Generator == this)
 					{
-						if (fieldHandleTypeInfo.Handle.Kind == HandleKind.TypeReference)
+						foreach (TypeDefinitionHandle nestedTypeDefinitionHandle in typeDefinition.GetNestedTypes())
 						{
-							if (this.TryGetTypeDefHandle((TypeReferenceHandle)fieldHandleTypeInfo.Handle, out QualifiedTypeDefinitionHandle fieldTypeDefHandle) && fieldTypeDefHandle.Generator == this)
+							if (fieldTypeDefinitionHandle.DefinitionHandle == nestedTypeDefinitionHandle)
 							{
-								foreach (TypeDefinitionHandle nestedTypeHandle in typeDef.GetNestedTypes())
-								{
-									if (fieldTypeDefHandle.DefinitionHandle == nestedTypeHandle)
-									{
-										thisFieldTypeSettings = thisFieldTypeSettings with { QualifyNames = false };
-										break;
-									}
-								}
+								thisFieldTypeSettings = thisFieldTypeSettings with { QualifyNames = false };
+								break;
 							}
 						}
 					}
 
-					TypeSyntaxAndMarshaling fieldTypeSyntax = fieldTypeInfo.ToTypeSyntax(thisFieldTypeSettings, GeneratingElement.StructMember, fieldAttributes);
-					(TypeSyntax FieldType, SyntaxList<MemberDeclarationSyntax> AdditionalMembers, AttributeSyntax? MarshalAsAttribute) fieldInfo = this.ReinterpretFieldType(fieldDef, fieldTypeSyntax.Type, fieldAttributes, context);
+					var fieldTypeSyntax = fieldTypeInfo.ToTypeSyntax(thisFieldTypeSettings, GeneratingElement.StructMember, fieldCustomAttributes);
+					var fieldInfo = ReinterpretFieldType(fieldDefinition, fieldTypeSyntax.Type, fieldCustomAttributes, context);
 					additionalMembers = additionalMembers.AddRange(fieldInfo.AdditionalMembers);
 
 					PropertyDeclarationSyntax? property = null;
-					if (this.FindAssociatedEnum(fieldAttributes) is { } propertyType)
+					if (FindAssociatedEnum(fieldCustomAttributes) is { } propertyType)
 					{
 						// Keep the field with its original type, but then add a property that returns the enum type.
 						fieldDeclarator = VariableDeclarator(SafeIdentifier($"_{fieldName}"));
-						field = FieldDeclaration(VariableDeclaration(fieldInfo.FieldType).AddVariables(fieldDeclarator))
+						fieldDeclarationSyntax = FieldDeclaration(VariableDeclaration(fieldInfo.FieldType).AddVariables(fieldDeclarator))
 							.AddModifiers(TokenWithSpace(SyntaxKind.PrivateKeyword));
 
-						// internal EnumType FieldName {
-						//    get => (EnumType)this._fieldName;
-						//    set => this._fieldName = (UnderlyingType)value;
+						// internal EnumType FieldName
+						// {
+						//    get => (EnumType)_fieldName;
+						//    set => _fieldName = (UnderlyingType)value;
 						// }
-						this.RequestInteropType(this.GetNamespaceForPossiblyNestedType(typeDef), propertyType.Identifier.ValueText, context);
+						RequestInteropType(GetNamespaceForPossiblyNestedType(typeDefinition), propertyType.Identifier.ValueText, context);
 						ExpressionSyntax fieldAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), IdentifierName(fieldDeclarator.Identifier));
 						property = PropertyDeclaration(propertyType.WithTrailingTrivia(Space), Identifier(fieldName).WithTrailingTrivia(LineFeed))
-							.AddModifiers(TokenWithSpace(this.Visibility))
+							.AddModifiers(TokenWithSpace(Visibility))
 							.WithAccessorList(AccessorList().AddAccessors(
 								AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(CastExpression(propertyType, fieldAccess))).WithSemicolonToken(Semicolon),
 								AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, fieldAccess, CastExpression(fieldInfo.FieldType, IdentifierName("value"))))).WithSemicolonToken(Semicolon)));
@@ -178,43 +191,41 @@ public partial class Generator
 					}
 					else
 					{
-						field = FieldDeclaration(VariableDeclaration(fieldInfo.FieldType).AddVariables(fieldDeclarator))
-							.AddModifiers(TokenWithSpace(this.Visibility));
+						fieldDeclarationSyntax = FieldDeclaration(VariableDeclaration(fieldInfo.FieldType).AddVariables(fieldDeclarator))
+							.AddModifiers(TokenWithSpace(Visibility));
 					}
 
-					if (fieldInfo.MarshalAsAttribute is object)
+					if (fieldInfo.MarshalAsAttribute is not null)
 					{
-						field = field.AddAttributeLists(AttributeList().AddAttributes(fieldInfo.MarshalAsAttribute));
+						fieldDeclarationSyntax = fieldDeclarationSyntax.AddAttributeLists(AttributeList().AddAttributes(fieldInfo.MarshalAsAttribute));
 					}
 
-					if (this.HasObsoleteAttribute(fieldDef.GetCustomAttributes()))
+					if (HasObsoleteAttribute(fieldDefinition.GetCustomAttributes()))
 					{
-						field = field.AddAttributeLists(AttributeList().AddAttributes(ObsoleteAttributeSyntax));
+						fieldDeclarationSyntax = fieldDeclarationSyntax.AddAttributeLists(AttributeList().AddAttributes(ObsoleteAttributeSyntax));
 						property = property?.AddAttributeLists(AttributeList().AddAttributes(ObsoleteAttributeSyntax));
 					}
 
 					if (RequiresUnsafe(fieldInfo.FieldType))
 					{
-						field = field.AddModifiers(TokenWithSpace(SyntaxKind.UnsafeKeyword));
+						fieldDeclarationSyntax = fieldDeclarationSyntax.AddModifiers(TokenWithSpace(SyntaxKind.UnsafeKeyword));
 					}
 
 					if (ObjectMembers.Contains(fieldName))
 					{
-						field = field.AddModifiers(TokenWithSpace(SyntaxKind.NewKeyword));
+						fieldDeclarationSyntax = fieldDeclarationSyntax.AddModifiers(TokenWithSpace(SyntaxKind.NewKeyword));
 					}
 				}
 
-				int offset = fieldDef.GetOffset();
+				int offset = fieldDefinition.GetOffset();
 				if (offset >= 0)
-				{
-					field = field.AddAttributeLists(AttributeList().AddAttributes(FieldOffset(offset)));
-				}
+					fieldDeclarationSyntax = fieldDeclarationSyntax.AddAttributeLists(AttributeList().AddAttributes(FieldOffset(offset)));
 
-				members.Add(field);
+				members.Add(fieldDeclarationSyntax);
 
-				foreach (CustomAttribute bitfieldAttribute in WinMDFileHelper.FindAttributes(this.WinMDReader, fieldDef.GetCustomAttributes(), InteropDecorationNamespace, NativeBitfieldAttribute))
+				foreach (CustomAttribute bitfieldAttribute in WinMDFileHelper.FindAttributes(WinMDReader, fieldDefinition.GetCustomAttributes(), InteropDecorationNamespace, NativeBitfieldAttribute))
 				{
-					var fieldTypeInfo = (PrimitiveTypeHandleInfo)fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null);
+					var fieldTypeInfo = (PrimitiveTypeHandleInfo)fieldDefinition.DecodeSignature(SignatureHandleProvider.Instance, null);
 
 					CustomAttributeValue<TypeSyntax> decodedAttribute = bitfieldAttribute.DecodeValue(CustomAttributeTypeProvider.Instance);
 					(int? fieldBitLength, bool signed) = fieldTypeInfo.PrimitiveTypeCode switch
@@ -267,7 +278,7 @@ public partial class Generator
 					LiteralExpressionSyntax maskExpr = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(ToHex(mask, fieldLengthInHexChars), mask));
 
 					ExpressionSyntax fieldAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), IdentifierName(fieldName));
-					TypeSyntax fieldType = field.Declaration.Type.WithoutTrailingTrivia();
+					TypeSyntax fieldType = fieldDeclarationSyntax.Declaration.Type.WithoutTrailingTrivia();
 
 					//// unchecked((int)~mask)
 					ExpressionSyntax notMask = UncheckedExpression(CastExpression(fieldType, PrefixUnaryExpression(SyntaxKind.BitwiseNotExpression, maskExpr)));
@@ -366,7 +377,7 @@ public partial class Generator
 					string allowedRange = propLength == 1 ? string.Empty : $" Allowed values are [{minValue}..{maxValue}].";
 
 					PropertyDeclarationSyntax bitfieldProperty = PropertyDeclaration(propertyType.WithTrailingTrivia(Space), Identifier(propName).WithTrailingTrivia(LineFeed))
-						.AddModifiers(TokenWithSpace(this.Visibility))
+						.AddModifiers(TokenWithSpace(Visibility))
 						.WithAccessorList(AccessorList().AddAccessors(getter, setter))
 						.WithLeadingTrivia(ParseLeadingTrivia($"/// <summary>Gets or sets {bitDescription} in the <see cref=\"{fieldName}\" /> field.{allowedRange}</summary>\n"));
 
@@ -381,42 +392,42 @@ public partial class Generator
 
 		// Add a SizeOf method, if there is a FlexibleArray field.
 		if (sizeOfMethod is not null)
-		{
 			members.Add(sizeOfMethod);
-		}
 
 		// Add the additional members, taking care to not introduce redundant declarations.
-		members.AddRange(additionalMembers.Where(c => c is not StructDeclarationSyntax cs || !members.OfType<StructDeclarationSyntax>().Any(m => m.Identifier.ValueText == cs.Identifier.ValueText)));
+		members.AddRange(additionalMembers.Where(c =>
+			c is not StructDeclarationSyntax cs ||
+			!members.OfType<StructDeclarationSyntax>().Any(m => m.Identifier.ValueText == cs.Identifier.ValueText)));
 
-		switch (name.Identifier.ValueText)
+		switch (identifierNameSyntax.Identifier.ValueText)
 		{
 			case "RECT":
 			case "SIZE":
 			case "SYSTEMTIME":
 			case "DECIMAL":
-				members.AddRange(this.ExtractMembersFromTemplate(name.Identifier.ValueText));
+				members.AddRange(ExtractMembersFromTemplate(identifierNameSyntax.Identifier.ValueText));
 				break;
 			default:
 				break;
 		}
 
-		StructDeclarationSyntax result = StructDeclaration(name.Identifier)
+		StructDeclarationSyntax result = StructDeclaration(identifierNameSyntax.Identifier)
 			.AddMembers(members.ToArray())
-			.WithModifiers(TokenList(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.PartialKeyword)));
+			.WithModifiers(TokenList(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.PartialKeyword)));
 
-		TypeLayout layout = typeDef.GetLayout();
+		TypeLayout layout = typeDefinition.GetLayout();
 		CharSet charSet = hasUtf16CharField ? CharSet.Unicode : CharSet.Ansi;
 		if (!layout.IsDefault || explicitLayout || charSet != CharSet.Ansi)
 		{
-			result = result.AddAttributeLists(AttributeList().AddAttributes(StructLayout(typeDef.Attributes, layout, charSet)));
+			result = result.AddAttributeLists(AttributeList().AddAttributes(StructLayout(typeDefinition.Attributes, layout, charSet)));
 		}
 
-		if (this.FindGuidFromAttribute(typeDef) is Guid guid)
+		if (FindGuidFromAttribute(typeDefinition) is Guid guid)
 		{
 			result = result.AddAttributeLists(AttributeList().AddAttributes(GUID(guid)));
 		}
 
-		result = this.AppendXmlCommentTo(name.Identifier.ValueText, result);
+		result = AppendXmlCommentTo(identifierNameSyntax.Identifier.ValueText, result);
 
 		return result;
 	}
@@ -428,9 +439,9 @@ public partial class Generator
 
 		// internal unsafe T e0;
 		members.Add(FieldDeclaration(VariableDeclaration(fieldType).AddVariables(VariableDeclarator(firstElementFieldName.Identifier)))
-			.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword)));
+			.AddModifiers(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword)));
 
-		if (this._canUseUnsafeAdd)
+		if (_canUseUnsafeAdd)
 		{
 			////[MethodImpl(MethodImplOptions.AggressiveInlining)]
 			////get { fixed (int** p = &e0) return *(p + index); }
@@ -458,18 +469,18 @@ public partial class Generator
 
 			////internal unsafe T this[int index]
 			members.Add(IndexerDeclaration(fieldType.WithTrailingTrivia(Space))
-				.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword))
+				.AddModifiers(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.UnsafeKeyword))
 				.AddParameterListParameters(Parameter(Identifier("index")).WithType(PredefinedType(TokenWithSpace(SyntaxKind.IntKeyword))))
 				.AddAccessorListAccessors(getter, setter));
 		}
 
 		// internal partial struct VariableLengthInlineArrayHelper
 		return StructDeclaration(Identifier("VariableLengthInlineArrayHelper"))
-			.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.PartialKeyword))
+			.AddModifiers(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.PartialKeyword))
 			.AddMembers(members.ToArray());
 	}
 
-	private MethodDeclarationSyntax DeclareSizeOfMethod(TypeSyntax structType, TypeSyntax elementType, TypeSyntaxSettings typeSettings)
+	private MethodDeclarationSyntax CreateFlexibleArraySizeOfMethodDeclaration(TypeSyntax structType, TypeSyntax elementType, TypeSyntaxSettings typeSettings)
 	{
 		PredefinedTypeSyntax intType = PredefinedType(TokenWithSpace(SyntaxKind.IntKeyword));
 		IdentifierNameSyntax countName = IdentifierName("count");
@@ -504,7 +515,7 @@ public partial class Generator
 		MethodDeclarationSyntax sizeOfMethod = MethodDeclaration(intType, Identifier("SizeOf"))
 			.AddParameterListParameters(Parameter(countName.Identifier).WithType(intType))
 			.WithBody(Block().AddStatements(statements.ToArray()))
-			.AddModifiers(TokenWithSpace(this.Visibility), TokenWithSpace(SyntaxKind.StaticKeyword), TokenWithSpace(SyntaxKind.UnsafeKeyword))
+			.AddModifiers(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.StaticKeyword), TokenWithSpace(SyntaxKind.UnsafeKeyword))
 			.WithLeadingTrivia(ParseLeadingTrivia("/// <summary>Computes the amount of memory that must be allocated to store this struct, including the specified number of elements in the variable length inline array at the end.</summary>\n"));
 
 		return sizeOfMethod;
@@ -512,25 +523,25 @@ public partial class Generator
 
 	private (TypeSyntax FieldType, SyntaxList<MemberDeclarationSyntax> AdditionalMembers, AttributeSyntax? MarshalAsAttribute) ReinterpretFieldType(FieldDefinition fieldDef, TypeSyntax originalType, CustomAttributeHandleCollection customAttributes, Context context)
 	{
-		TypeSyntaxSettings typeSettings = context.Filter(this._fieldTypeSettings);
+		TypeSyntaxSettings typeSettings = context.Filter(_fieldTypeSettings);
 		TypeHandleInfo fieldTypeHandleInfo = fieldDef.DecodeSignature(SignatureHandleProvider.Instance, null);
 		AttributeSyntax? marshalAs = null;
 
 		// If the field is a fixed length array, we have to work some code gen magic since C# does not allow those.
 		if (originalType is ArrayTypeSyntax arrayType && arrayType.RankSpecifiers.Count > 0 && arrayType.RankSpecifiers[0].Sizes.Count == 1)
 		{
-			return this.DeclareFixedLengthArrayStruct(fieldDef, customAttributes, fieldTypeHandleInfo, arrayType, context);
+			return DeclareFixedLengthArrayStruct(fieldDef, customAttributes, fieldTypeHandleInfo, arrayType, context);
 		}
 
 		// If the field is a delegate type, we have to replace that with a native function pointer to avoid the struct becoming a 'managed type'.
-		if ((!context.AllowMarshaling) && this.IsDelegateReference(fieldTypeHandleInfo, out QualifiedTypeDefinition typeDef) && !typeDef.Generator.IsUntypedDelegate(typeDef.Definition))
+		if ((!context.AllowMarshaling) && IsDelegateReference(fieldTypeHandleInfo, out QualifiedTypeDefinition typeDef) && !typeDef.Generator.IsUntypedDelegate(typeDef.Definition))
 		{
-			return (this.FunctionPointer(typeDef), default(SyntaxList<MemberDeclarationSyntax>), marshalAs);
+			return (FunctionPointer(typeDef), default(SyntaxList<MemberDeclarationSyntax>), marshalAs);
 		}
 
 		// If the field is a pointer to a COM interface (and we're using bona fide interfaces),
 		// then we must type it as an array.
-		if (context.AllowMarshaling && fieldTypeHandleInfo is PointerTypeHandleInfo ptr3 && this.IsInterface(ptr3.ElementType))
+		if (context.AllowMarshaling && fieldTypeHandleInfo is PointerTypeHandleInfo ptr3 && IsInterface(ptr3.ElementType))
 		{
 			return (ArrayType(ptr3.ElementType.ToTypeSyntax(typeSettings, GeneratingElement.Field, null).Type).AddRankSpecifiers(ArrayRankSpecifier()), default(SyntaxList<MemberDeclarationSyntax>), marshalAs);
 		}
@@ -540,15 +551,15 @@ public partial class Generator
 
 	private void RequestVariableLengthInlineArrayHelper1(Context context)
 	{
-		if (this.IsWin32Sdk)
+		if (IsWin32Sdk)
 		{
-			if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{this._variableLengthInlineArrayStruct1.Identifier.ValueText}`1"))
+			if (!IsTypeAlreadyFullyDeclared($"{Namespace}.{_variableLengthInlineArrayStruct1.Identifier.ValueText}`1"))
 			{
-				this.DeclareUnscopedRefAttributeIfNecessary();
-				this._volatileCode.GenerateSpecialType("VariableLengthInlineArray1", () => this._volatileCode.AddSpecialType("VariableLengthInlineArray1", this._variableLengthInlineArrayStruct1));
+				DeclareUnscopedRefAttributeIfNecessary();
+				_volatileCode.GenerateSpecialType("VariableLengthInlineArray1", () => _volatileCode.AddSpecialType("VariableLengthInlineArray1", _variableLengthInlineArrayStruct1));
 			}
 		}
-		else if (this.Manager is not null && this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
+		else if (Manager is not null && Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 		{
 			generator._volatileCode.GenerationTransaction(delegate
 			{
@@ -559,15 +570,15 @@ public partial class Generator
 
 	private void RequestVariableLengthInlineArrayHelper2(Context context)
 	{
-		if (this.IsWin32Sdk)
+		if (IsWin32Sdk)
 		{
-			if (!this.IsTypeAlreadyFullyDeclared($"{this.Namespace}.{this.variableLengthInlineArrayStruct2.Identifier.ValueText}`2"))
+			if (!IsTypeAlreadyFullyDeclared($"{Namespace}.{variableLengthInlineArrayStruct2.Identifier.ValueText}`2"))
 			{
-				this.DeclareUnscopedRefAttributeIfNecessary();
-				this._volatileCode.GenerateSpecialType("VariableLengthInlineArray2", () => this._volatileCode.AddSpecialType("VariableLengthInlineArray2", this.variableLengthInlineArrayStruct2));
+				DeclareUnscopedRefAttributeIfNecessary();
+				_volatileCode.GenerateSpecialType("VariableLengthInlineArray2", () => _volatileCode.AddSpecialType("VariableLengthInlineArray2", variableLengthInlineArrayStruct2));
 			}
 		}
-		else if (this.Manager is not null && this.Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
+		else if (Manager is not null && Manager.TryGetGenerator("Windows.Win32", out Generator? generator))
 		{
 			generator._volatileCode.GenerationTransaction(delegate
 			{

@@ -1204,7 +1204,7 @@ public partial class Generator : IGenerator, IDisposable
 				}
 				else
 				{
-					StructDeclarationSyntax structDeclaration = DeclareStruct(typeDefHandle, context);
+					StructDeclarationSyntax structDeclaration = CreateStructDeclaration(typeDefHandle, context);
 
 					// Proactively generate all nested types as well.
 					// If the outer struct is using ExplicitLayout, generate the nested types as unmanaged structs since that's what will be needed.

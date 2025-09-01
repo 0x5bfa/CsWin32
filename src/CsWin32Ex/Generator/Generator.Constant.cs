@@ -136,7 +136,7 @@ public partial class Generator
 		this._volatileCode.GenerateConstant(fieldDefHandle, delegate
 		{
 			FieldDefinition fieldDef = this.WinMDReader.GetFieldDefinition(fieldDefHandle);
-			FieldDeclarationSyntax constantDeclaration = this.DeclareConstant(fieldDef);
+			FieldDeclarationSyntax constantDeclaration = this.CreateConstantDeclaration(fieldDef);
 
 			TypeHandleInfo fieldTypeInfo = fieldDef.DecodeSignature<TypeHandleInfo, SignatureHandleProvider.IGenericContext?>(SignatureHandleProvider.Instance, null) with { IsConstantField = true };
 			TypeDefinitionHandle? fieldType = null;
@@ -348,7 +348,7 @@ public partial class Generator
 			out unsafeRequired);
 	}
 
-	private FieldDeclarationSyntax DeclareConstant(FieldDefinition fieldDef)
+	private FieldDeclarationSyntax CreateConstantDeclaration(FieldDefinition fieldDef)
 	{
 		string name = this.WinMDReader.GetString(fieldDef.Name);
 		try
