@@ -85,4 +85,43 @@ public enum SERVICE_ERROR : uint
 
 Currently, there's no way to inform the generator that a delegate is untyped and should be generated as a struct with a method that calls `Marshal.GetDelegateForFunctionPointer<T>()`. This feature is limited to `PROC` and `FARPROC` only.
 
+### Appending XML comments
+
+_Write about msgpack._
+
+## Type-associated Enums
+
+To generate a field in a type (e.g., a struct, a class), that an enum value is typically set to, define `AssociatedEnumAttribute` with the enum name as its first parameter, and apply it to the field. The associated enum will be generated along with the type and the type of the field becomes the type of the enum without breaking the memory layout of the parent type.
+
+```cs
+public sealed class AssociatedEnumAttribute(string EnumName) : Attribute { }
+```
+
+```cs
+public struct DXGI_SWAP_CHAIN_DESC
+{
+    // ...
+
+    [AssociatedEnum("DXGI_SWAP_CHAIN_FLAG")]
+    public uint Flags;
+}
+```
+
+Becomes:
+
+```cs
+internal struct DXGI_SWAP_CHAIN_DESC
+{
+    // ...
+
+    private uint _Flags; // if AllowMarshaling is true, the type here becomes DXGI_SWAP_CHAIN_FLAG as well
+
+    internal DXGI_SWAP_CHAIN_FLAG Flags
+    {
+        get => (DXGI_SWAP_CHAIN_FLAG)this._Flags;
+        set => this._Flags = (uint)value;
+    }
+}
+```
+
 _More coming soon._
