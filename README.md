@@ -12,7 +12,7 @@ The codebase has been greatly simplified: unnecessary files have been removed, a
 > dotnet add package CsWin32Ex --version 1.0.0
 ```
 
-## Authoring a CsWin32(Ex)-compatible WinMD
+## Enhance your CsWin32(Ex)-compatible WinMD
 
 When authoring a WinMD file for use with CsWin32 (or CsWin32Ex), note these following features of CsWin32(Ex) so the consumers can utilize the generated interop code more conveniently.
 
@@ -89,9 +89,9 @@ Currently, there's no way to inform the generator that a delegate is untyped and
 
 _Write about msgpack._
 
-## Type-associated Enums
+### Type-associated Enums
 
-To generate a field in a type (e.g., a struct, a class), that an enum value is typically set to, define `AssociatedEnumAttribute` with the enum name as its first parameter, and apply it to the field. The associated enum will be generated along with the type and the type of the field becomes the type of the enum without breaking the memory layout of the parent type.
+To generate a field in a type (e.g., a struct, a class), that an enum value is typically set to, define `AssociatedEnumAttribute` with the enum name as its first parameter, and apply it to the field. The associated enum will be generated along with the type and the type of the field becomes the type of the enum without breaking the memory layout of the parent type (metadata should keep the original ABI).
 
 ```cs
 public sealed class AssociatedEnumAttribute(string EnumName) : Attribute { }
@@ -123,5 +123,7 @@ internal struct DXGI_SWAP_CHAIN_DESC
     }
 }
 ```
+
+### Union
 
 _More coming soon._

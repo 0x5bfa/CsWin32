@@ -1,32 +1,24 @@
 ﻿// Copyright (c) 0x5BFA.
 
+using System.CodeDom.Compiler;
+
 namespace CsWin32Ex;
 
 public partial class Generator
 {
-	private static byte GetLengthInBytes(PrimitiveTypeCode code) => code switch
-	{
-		PrimitiveTypeCode.SByte or PrimitiveTypeCode.Byte => 1,
-		PrimitiveTypeCode.Int16 or PrimitiveTypeCode.UInt16 => 2,
-		PrimitiveTypeCode.Int32 or PrimitiveTypeCode.UInt32 => 4,
-		PrimitiveTypeCode.Int64 or PrimitiveTypeCode.UInt64 => 8,
-		PrimitiveTypeCode.IntPtr or PrimitiveTypeCode.UIntPtr => 8, // Assume this -- guessing high isn't a problem for our use case.
-		_ => throw new NotSupportedException($"Unsupported primitive type code: {code}"),
-	};
-
 	private StructDeclarationSyntax CreateStructDeclaration(TypeDefinitionHandle typeDefinitionHandle, Context context)
 	{
 		var typeDefinition = WinMDReader.GetTypeDefinition(typeDefinitionHandle);
 		var isManagedType = IsManagedType(typeDefinitionHandle);
 		var identifierNameSyntax = IdentifierName(GetMangledIdentifier(WinMDReader.GetString(typeDefinition.Name), context.AllowMarshaling, isManagedType));
 
-		var explicitLayout = StructHelpers.HasTypeAttributesOf(typeDefinition, TypeAttributes.ExplicitLayout);
+		var explicitLayout = MetadataHelpers.HasTypeAttributesOf(typeDefinition, TypeAttributes.ExplicitLayout);
 		if (explicitLayout)
 			context = context with { AllowMarshaling = false };
 
 		// Disable marshalling when the last field has the [FlexibleArrayAttribute]. The struct is only ever valid
 		// when accessed via a pointer, since the struct acts as a header of an arbitrarily-sized array.
-		if (StructHelpers.TryGetFlexibleArrayField(typeDefinition, WinMDReader, out var flexibleArrayFieldDefinitionHandle))
+		if (MetadataHelpers.TryGetFlexibleArrayField(typeDefinition, WinMDReader, out var flexibleArrayFieldDefinitionHandle))
 			context = context with { AllowMarshaling = false };
 
 		MethodDeclarationSyntax? sizeOfMethod = null;
@@ -40,13 +32,13 @@ public partial class Generator
 			var fieldDefinition = WinMDReader.GetFieldDefinition(fieldDefinitionHandle);
 			FieldDeclarationSyntax fieldDeclarationSyntax;
 
-			if (StructHelpers.IsConstField(fieldDefinition))
+			if (MetadataHelpers.IsConstField(fieldDefinition))
 			{
 				fieldDeclarationSyntax = CreateConstantDeclaration(fieldDefinition);
 				members.Add(fieldDeclarationSyntax);
 				continue;
 			}
-			else if (StructHelpers.IsStaticField(fieldDefinition))
+			else if (MetadataHelpers.IsStaticField(fieldDefinition))
 			{
 				throw new NotSupportedException();
 			}
@@ -55,25 +47,26 @@ public partial class Generator
 
 			try
 			{
+				var fieldTypeInfo = fieldDefinition.DecodeSignature(SignatureHandleProvider.Instance, null);
 				var fieldCustomAttributes = fieldDefinition.GetCustomAttributes();
 				var fieldDeclarator = VariableDeclarator(SafeIdentifier(fieldName));
 
 				// Check if the field has "fixed" keyword
-				if (StructHelpers.HasCustomAttributeOf(fieldCustomAttributes, WinMDReader, SystemRuntimeCompilerServices, nameof(FixedBufferAttribute), out var customAttribute))
+				if (FeatureHelpers.HasFixedBufferAttribute(fieldCustomAttributes, WinMDReader, out _))
 				{
-					if (customAttribute is { } fixedBufferAttribute &&
-						fixedBufferAttribute.DecodeValue(CustomAttributeTypeProvider.Instance) is { } fixedBufferAttributeArguments &&
-						fixedBufferAttributeArguments.FixedArguments.Length is 2 &&
-						fixedBufferAttributeArguments.FixedArguments[0].Value is TypeSyntax fieldTypeSyntax &&
-						fixedBufferAttributeArguments.FixedArguments[1].Value is int fieldArraySizeSyntax &&
+					if (FeatureHelpers.TryExtractFixedBufferAttribute(fieldCustomAttributes, WinMDReader, out var fieldTypeSyntax, out var fieldArraySizeSyntax) &&
 						LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(fieldArraySizeSyntax)) is ExpressionSyntax arraySizeExpressionSyntax)
 					{
+						// ================================================================================
 						//   internal unsafe fixed char Name[32];
-						// Becomes:
+						// ================================================================================
+						// Becomes
+						// ================================================================================
 						//   [StructLayout(LayoutKind.Sequential, Size = 64), CompilerGenerated, UnsafeValueType]
 						//   public struct <StandardName>e__FixedBuffer { public char FixedElementField; }
 						//   [FixedBuffer(typeof(char), 32)]
 						//   internal <StandardName>e__FixedBuffer StandardName;
+						// ================================================================================
 						// So, we need to revert it back to the original form.
 						fieldDeclarationSyntax = FieldDeclaration(
 							VariableDeclaration(fieldTypeSyntax))
@@ -84,14 +77,14 @@ public partial class Generator
 					}
 					else
 					{
-						throw new InvalidOperationException("The fixed keyword is not correctly interpreted.");
+						throw new InvalidOperationException("The fixed keyword is not correctly used.");
 					}
 				}
 				// Check if the field has "[FlexibleArrayAttribute]" and generate a helper struct for a variable-length inline array, if any
 				else if (fieldDefinitionHandle == flexibleArrayFieldDefinitionHandle)
 				{
-					if (fieldDefinition.DecodeSignature(SignatureHandleProvider.Instance, null) is ArrayTypeHandleInfo fieldTypeInfo &&
-						fieldTypeInfo.ElementType.ToTypeSyntax(typeSettings, GeneratingElement.StructMember, fieldCustomAttributes).Type is { } fieldTypeSyntax)
+					if (fieldTypeInfo is ArrayTypeHandleInfo arrayTypeHandleInfo &&
+						arrayTypeHandleInfo.ElementType.ToTypeSyntax(typeSettings, GeneratingElement.StructMember, fieldCustomAttributes).Type is { } fieldTypeSyntax)
 					{
 						// If the field is a pointer or a function pointer, declare as-is
 						// since the helper struct takes a generic type argument but these types aren't supported
@@ -139,9 +132,9 @@ public partial class Generator
 					}
 
 				}
+				// Check for other cases
 				else
 				{
-					var fieldTypeInfo = fieldDefinition.DecodeSignature(SignatureHandleProvider.Instance, null);
 					hasUtf16CharField |= fieldTypeInfo is PrimitiveTypeHandleInfo { PrimitiveTypeCode: PrimitiveTypeCode.Char };
 					var thisFieldTypeSettings = typeSettings;
 
@@ -168,220 +161,240 @@ public partial class Generator
 					additionalMembers = additionalMembers.AddRange(fieldInfo.AdditionalMembers);
 
 					PropertyDeclarationSyntax? property = null;
-					if (FindAssociatedEnum(fieldCustomAttributes) is { } propertyType)
+
+					if (FeatureHelpers.TryExtractAssociatedEnumAttribute(fieldCustomAttributes, WinMDReader, out var enumIdentifierNameSyntax))
 					{
-						// Keep the field with its original type, but then add a property that returns the enum type.
+						// Keep the field with its original type, but then add a property that returns the enum type
+						// ================================================================================
+						//   private OriginalType _FieldName;
+						// ================================================================================
 						fieldDeclarator = VariableDeclarator(SafeIdentifier($"_{fieldName}"));
 						fieldDeclarationSyntax = FieldDeclaration(VariableDeclaration(fieldInfo.FieldType).AddVariables(fieldDeclarator))
 							.AddModifiers(TokenWithSpace(SyntaxKind.PrivateKeyword));
 
-						// internal EnumType FieldName
-						// {
-						//    get => (EnumType)_fieldName;
-						//    set => _fieldName = (UnderlyingType)value;
-						// }
-						RequestInteropType(GetNamespaceForPossiblyNestedType(typeDefinition), propertyType.Identifier.ValueText, context);
+						// Generate a property for the backing field
+						// ================================================================================
+						//   internal EnumType FieldName
+						//   {
+						//       get => (EnumType)_FieldName;
+						//       set => _FieldName = (OriginalType)value;
+						//   }
+						// ================================================================================
+						RequestInteropType(GetNamespaceForPossiblyNestedType(typeDefinition), enumIdentifierNameSyntax.Identifier.ValueText, context);
 						ExpressionSyntax fieldAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), IdentifierName(fieldDeclarator.Identifier));
-						property = PropertyDeclaration(propertyType.WithTrailingTrivia(Space), Identifier(fieldName).WithTrailingTrivia(LineFeed))
+						property = PropertyDeclaration(enumIdentifierNameSyntax.WithTrailingTrivia(Space), Identifier(fieldName).WithTrailingTrivia(LineFeed))
 							.AddModifiers(TokenWithSpace(Visibility))
 							.WithAccessorList(AccessorList().AddAccessors(
-								AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(CastExpression(propertyType, fieldAccess))).WithSemicolonToken(Semicolon),
+								AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(CastExpression(enumIdentifierNameSyntax, fieldAccess))).WithSemicolonToken(Semicolon),
 								AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithExpressionBody(ArrowExpressionClause(AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, fieldAccess, CastExpression(fieldInfo.FieldType, IdentifierName("value"))))).WithSemicolonToken(Semicolon)));
+
 						additionalMembers = additionalMembers.Add(property);
 					}
 					else
 					{
+						// Just generate a normal field
 						fieldDeclarationSyntax = FieldDeclaration(VariableDeclaration(fieldInfo.FieldType).AddVariables(fieldDeclarator))
 							.AddModifiers(TokenWithSpace(Visibility));
 					}
 
+					// Add [MarshalAsAttribute] if needed
 					if (fieldInfo.MarshalAsAttribute is not null)
-					{
 						fieldDeclarationSyntax = fieldDeclarationSyntax.AddAttributeLists(AttributeList().AddAttributes(fieldInfo.MarshalAsAttribute));
-					}
 
-					if (HasObsoleteAttribute(fieldDefinition.GetCustomAttributes()))
+					// Add [ObsoleteAttribute] if needed
+					if (FeatureHelpers.HasObsoleteAttribute(fieldDefinition.GetCustomAttributes(), WinMDReader, out _))
 					{
 						fieldDeclarationSyntax = fieldDeclarationSyntax.AddAttributeLists(AttributeList().AddAttributes(ObsoleteAttributeSyntax));
 						property = property?.AddAttributeLists(AttributeList().AddAttributes(ObsoleteAttributeSyntax));
 					}
 
+					// Add "unsafe" modifier if needed
 					if (RequiresUnsafe(fieldInfo.FieldType))
-					{
 						fieldDeclarationSyntax = fieldDeclarationSyntax.AddModifiers(TokenWithSpace(SyntaxKind.UnsafeKeyword));
-					}
 
+					// Add "new" modifier if needed
 					if (ObjectMembers.Contains(fieldName))
-					{
 						fieldDeclarationSyntax = fieldDeclarationSyntax.AddModifiers(TokenWithSpace(SyntaxKind.NewKeyword));
-					}
 				}
 
+				// Add a [FieldOffsetAttribute], If the field offset is explicitly set
 				int offset = fieldDefinition.GetOffset();
 				if (offset >= 0)
 					fieldDeclarationSyntax = fieldDeclarationSyntax.AddAttributeLists(AttributeList().AddAttributes(FieldOffset(offset)));
 
 				members.Add(fieldDeclarationSyntax);
 
-				foreach (CustomAttribute bitfieldAttribute in WinMDFileHelper.FindAttributes(WinMDReader, fieldDefinition.GetCustomAttributes(), InteropDecorationNamespace, NativeBitfieldAttribute))
+				if (FeatureHelpers.TryExtractNativeBitfieldAttributes(fieldCustomAttributes, WinMDReader, out var nativeBitfieldAttributes))
 				{
-					var fieldTypeInfo = (PrimitiveTypeHandleInfo)fieldDefinition.DecodeSignature(SignatureHandleProvider.Instance, null);
-
-					CustomAttributeValue<TypeSyntax> decodedAttribute = bitfieldAttribute.DecodeValue(CustomAttributeTypeProvider.Instance);
-					(int? fieldBitLength, bool signed) = fieldTypeInfo.PrimitiveTypeCode switch
+					foreach (var nativeBitfieldAttribute in nativeBitfieldAttributes)
 					{
-						PrimitiveTypeCode.Byte => (8, false),
-						PrimitiveTypeCode.SByte => (8, true),
-						PrimitiveTypeCode.UInt16 => (16, false),
-						PrimitiveTypeCode.Int16 => (16, true),
-						PrimitiveTypeCode.UInt32 => (32, false),
-						PrimitiveTypeCode.Int32 => (32, true),
-						PrimitiveTypeCode.UInt64 => (64, false),
-						PrimitiveTypeCode.Int64 => (64, true),
-						PrimitiveTypeCode.UIntPtr => (null, false),
-						PrimitiveTypeCode.IntPtr => ((int?)null, true),
-						_ => throw new NotImplementedException(),
-					};
-					string propName = (string)decodedAttribute.FixedArguments[0].Value!;
-					byte propOffset = (byte)(long)decodedAttribute.FixedArguments[1].Value!;
-					byte propLength = (byte)(long)decodedAttribute.FixedArguments[2].Value!;
-					if (propLength == 0)
-					{
-						// D3DKMDT_DISPLAYMODE_FLAGS has an "Anonymous" 0-length bitfield,
-						// but that's totally useless and breaks our math later on, so skip it.
-						continue;
-					}
-
-					long minValue = signed ? -(1L << (propLength - 1)) : 0;
-					long maxValue = (1L << (propLength - (signed ? 1 : 0))) - 1;
-					int? leftPad = fieldBitLength.HasValue ? fieldBitLength - (propOffset + propLength) : null;
-					int rightPad = propOffset;
-					(TypeSyntax propertyType, int propertyBitLength) = propLength switch
-					{
-						1 => (PredefinedType(Token(SyntaxKind.BoolKeyword)), 1),
-						<= 8 => (PredefinedType(Token(signed ? SyntaxKind.SByteKeyword : SyntaxKind.ByteKeyword)), 8),
-						<= 16 => (PredefinedType(Token(signed ? SyntaxKind.ShortKeyword : SyntaxKind.UShortKeyword)), 16),
-						<= 32 => (PredefinedType(Token(signed ? SyntaxKind.IntKeyword : SyntaxKind.UIntKeyword)), 32),
-						<= 64 => (PredefinedType(Token(signed ? SyntaxKind.LongKeyword : SyntaxKind.ULongKeyword)), 64),
-						_ => throw new NotSupportedException(),
-					};
-
-					AccessorDeclarationSyntax getter = AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
-						.AddModifiers(TokenWithSpace(SyntaxKind.ReadOnlyKeyword))
-						.AddAttributeLists(AttributeList().AddAttributes(MethodImpl(MethodImplOptions.AggressiveInlining)));
-					AccessorDeclarationSyntax setter = AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
-						.AddAttributeLists(AttributeList().AddAttributes(MethodImpl(MethodImplOptions.AggressiveInlining)));
-
-					ulong maskNoOffset = (1UL << propLength) - 1;
-					ulong mask = maskNoOffset << propOffset;
-					int fieldLengthInHexChars = GetLengthInBytes(fieldTypeInfo.PrimitiveTypeCode) * 2;
-					LiteralExpressionSyntax maskExpr = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(ToHex(mask, fieldLengthInHexChars), mask));
-
-					ExpressionSyntax fieldAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), IdentifierName(fieldName));
-					TypeSyntax fieldType = fieldDeclarationSyntax.Declaration.Type.WithoutTrailingTrivia();
-
-					//// unchecked((int)~mask)
-					ExpressionSyntax notMask = UncheckedExpression(CastExpression(fieldType, PrefixUnaryExpression(SyntaxKind.BitwiseNotExpression, maskExpr)));
-					//// (field & unchecked((int)~mask))
-					ExpressionSyntax fieldAndNotMask = ParenthesizedExpression(BinaryExpression(SyntaxKind.BitwiseAndExpression, fieldAccess, notMask));
-
-					if (propLength > 1)
-					{
-						LiteralExpressionSyntax maskNoOffsetExpr = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(ToHex(maskNoOffset, fieldLengthInHexChars), maskNoOffset));
-						ExpressionSyntax notMaskNoOffset = UncheckedExpression(CastExpression(propertyType, PrefixUnaryExpression(SyntaxKind.BitwiseNotExpression, maskNoOffsetExpr)));
-						LiteralExpressionSyntax propOffsetExpr = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(propOffset));
-
-						// signed:
-						// get => (byte)((field << leftPad) >> (leftPad + rightPad)));
-						// unsigned:
-						// get => (byte)((field >> rightPad) & maskNoOffset);
-						ExpressionSyntax getterExpression =
-							CastExpression(propertyType, ParenthesizedExpression(
-								signed ?
-									BinaryExpression(
-										SyntaxKind.RightShiftExpression,
-										ParenthesizedExpression(BinaryExpression(
-											SyntaxKind.LeftShiftExpression,
-											fieldAccess,
-											LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(leftPad!.Value)))),
-										LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(leftPad.Value + rightPad)))
-									: BinaryExpression(
-										SyntaxKind.BitwiseAndExpression,
-										ParenthesizedExpression(BinaryExpression(SyntaxKind.RightShiftExpression, fieldAccess, LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(rightPad)))),
-										maskNoOffsetExpr)));
-						getter = getter
-							.WithExpressionBody(ArrowExpressionClause(getterExpression))
-							.WithSemicolonToken(SemicolonWithLineFeed);
-
-						IdentifierNameSyntax valueName = IdentifierName("value");
-
-						List<StatementSyntax> setterStatements = new();
-						if (propertyBitLength > propLength)
+						if (fieldTypeInfo is PrimitiveTypeHandleInfo primitiveTypeHandleInfo &&
+							nativeBitfieldAttribute.DecodeValue(CustomAttributeTypeProvider.Instance) is { } decodedAttribute &&
+							decodedAttribute.FixedArguments[0].Value is string propertyName &&
+							decodedAttribute.FixedArguments[1].Value is long propertyOffset &&
+							decodedAttribute.FixedArguments[2].Value is long propertyLength)
 						{
-							// The allowed range is smaller than the property type, so we need to check that the value fits.
-							// signed:
-							//  global::System.Debug.Assert(value is >= minValue and <= maxValue);
-							// unsigned:
-							//  global::System.Debug.Assert(value is <= maxValue);
-							RelationalPatternSyntax max = RelationalPattern(TokenWithSpace(SyntaxKind.LessThanEqualsToken), CastExpression(propertyType, LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(maxValue))));
-							RelationalPatternSyntax? min = signed ? RelationalPattern(TokenWithSpace(SyntaxKind.GreaterThanEqualsToken), CastExpression(propertyType, LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(minValue)))) : null;
-							setterStatements.Add(ExpressionStatement(InvocationExpression(
-								ParseName("global::System.Diagnostics.Debug.Assert"),
-								ArgumentList().AddArguments(Argument(
-									IsPatternExpression(
-										valueName,
-										min is null ? max : BinaryPattern(SyntaxKind.AndPattern, min, max)))))));
-						}
+							var propertyOffsetAsByte = (byte)propertyOffset;
+							var propertyLengthAsByte = (byte)propertyLength;
 
-						// field = (int)((field & unchecked((int)~mask)) | ((int)(value & mask) << propOffset)));
-						ExpressionSyntax valueAndMaskNoOffset = ParenthesizedExpression(BinaryExpression(SyntaxKind.BitwiseAndExpression, valueName, maskNoOffsetExpr));
-						setterStatements.Add(ExpressionStatement(AssignmentExpression(
-							SyntaxKind.SimpleAssignmentExpression,
-							fieldAccess,
-							CastExpression(fieldType, ParenthesizedExpression(
-								BinaryExpression(
-									SyntaxKind.BitwiseOrExpression,
-									//// (field & unchecked((int)~mask))
-									fieldAndNotMask,
-									//// ((int)(value & mask) << propOffset)
-									ParenthesizedExpression(BinaryExpression(SyntaxKind.LeftShiftExpression, CastExpression(fieldType, valueAndMaskNoOffset), propOffsetExpr))))))));
-						setter = setter.WithBody(Block().AddStatements(setterStatements.ToArray()));
-					}
-					else
-					{
-						// get => (field & getterMask) != 0;
-						getter = getter
-							.WithExpressionBody(ArrowExpressionClause(BinaryExpression(
-								SyntaxKind.NotEqualsExpression,
-								ParenthesizedExpression(BinaryExpression(SyntaxKind.BitwiseAndExpression, fieldAccess, maskExpr)),
-								LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(0)))))
-							.WithSemicolonToken(SemicolonWithLineFeed);
+							// D3DKMDT_DISPLAYMODE_FLAGS has an "Anonymous" 0-length bitfield,
+							// but that's totally useless and breaks our math later on, so skip it.
+							if (propertyLengthAsByte is 0)
+								continue;
 
-						// set => field = (byte)(value ? field | getterMask : field & unchecked((int)~getterMask));
-						setter = setter
-							.WithExpressionBody(ArrowExpressionClause(
-								AssignmentExpression(
+							var (lengthInBits, signed) = MetadataHelpers.GetLengthInBits(primitiveTypeHandleInfo.PrimitiveTypeCode);
+
+							long minValue = signed ? -(1L << (propertyLengthAsByte - 1)) : 0;
+							long maxValue = (1L << (propertyLengthAsByte - (signed ? 1 : 0))) - 1;
+							int? leftPad = lengthInBits.HasValue ? lengthInBits - (propertyOffsetAsByte + propertyLengthAsByte) : null;
+							int rightPad = propertyOffsetAsByte;
+							(TypeSyntax propertyType, int propertyBitLength) = propertyLengthAsByte switch
+							{
+								1 => (PredefinedType(Token(SyntaxKind.BoolKeyword)), 1),
+								<= 8 => (PredefinedType(Token(signed ? SyntaxKind.SByteKeyword : SyntaxKind.ByteKeyword)), 8),
+								<= 16 => (PredefinedType(Token(signed ? SyntaxKind.ShortKeyword : SyntaxKind.UShortKeyword)), 16),
+								<= 32 => (PredefinedType(Token(signed ? SyntaxKind.IntKeyword : SyntaxKind.UIntKeyword)), 32),
+								<= 64 => (PredefinedType(Token(signed ? SyntaxKind.LongKeyword : SyntaxKind.ULongKeyword)), 64),
+								_ => throw new NotSupportedException(),
+							};
+
+							// [MethodImpl(MethodImplOptions.AggressiveInlining)]
+							// readonly get => (byte)((this._bitfield >> 0) & 0x000000000000001F);
+
+							var getter = AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+								.AddModifiers(TokenWithSpace(SyntaxKind.ReadOnlyKeyword))
+								.AddAttributeLists(AttributeList().AddAttributes(MethodImpl(MethodImplOptions.AggressiveInlining)));
+							var setter = AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
+								.AddAttributeLists(AttributeList().AddAttributes(MethodImpl(MethodImplOptions.AggressiveInlining)));
+
+							ulong maskNoOffset = (1UL << propertyLengthAsByte) - 1;
+							ulong mask = maskNoOffset << propertyOffsetAsByte;
+							int fieldLengthInHexChars = MetadataHelpers.GetLengthInBytes(primitiveTypeHandleInfo.PrimitiveTypeCode) * 2;
+							LiteralExpressionSyntax maskExpr = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(ToHex(mask, fieldLengthInHexChars), mask));
+
+							ExpressionSyntax fieldAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, ThisExpression(), IdentifierName(fieldName));
+							TypeSyntax fieldType = fieldDeclarationSyntax.Declaration.Type.WithoutTrailingTrivia();
+
+							//// unchecked((int)~mask)
+							ExpressionSyntax notMask = UncheckedExpression(CastExpression(fieldType, PrefixUnaryExpression(SyntaxKind.BitwiseNotExpression, maskExpr)));
+							//// (field & unchecked((int)~mask))
+							ExpressionSyntax fieldAndNotMask = ParenthesizedExpression(BinaryExpression(SyntaxKind.BitwiseAndExpression, fieldAccess, notMask));
+
+							if (propertyLengthAsByte > 1)
+							{
+								LiteralExpressionSyntax maskNoOffsetExpr = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(ToHex(maskNoOffset, fieldLengthInHexChars), maskNoOffset));
+								ExpressionSyntax notMaskNoOffset = UncheckedExpression(CastExpression(propertyType, PrefixUnaryExpression(SyntaxKind.BitwiseNotExpression, maskNoOffsetExpr)));
+								LiteralExpressionSyntax propOffsetExpr = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(propertyOffsetAsByte));
+
+								// signed:
+								// get => (byte)((field << leftPad) >> (leftPad + rightPad)));
+								// unsigned:
+								// get => (byte)((field >> rightPad) & maskNoOffset);
+								ExpressionSyntax getterExpression =
+									CastExpression(propertyType, ParenthesizedExpression(
+										signed ?
+											BinaryExpression(
+												SyntaxKind.RightShiftExpression,
+												ParenthesizedExpression(BinaryExpression(
+													SyntaxKind.LeftShiftExpression,
+													fieldAccess,
+													LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(leftPad!.Value)))),
+												LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(leftPad.Value + rightPad)))
+											: BinaryExpression(
+												SyntaxKind.BitwiseAndExpression,
+												ParenthesizedExpression(BinaryExpression(SyntaxKind.RightShiftExpression, fieldAccess, LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(rightPad)))),
+												maskNoOffsetExpr)));
+								getter = getter
+									.WithExpressionBody(ArrowExpressionClause(getterExpression))
+									.WithSemicolonToken(SemicolonWithLineFeed);
+
+								IdentifierNameSyntax valueName = IdentifierName("value");
+
+								List<StatementSyntax> setterStatements = new();
+								if (propertyBitLength > propertyLengthAsByte)
+								{
+									// The allowed range is smaller than the property type, so we need to check that the value fits.
+									// signed:
+									//  global::System.Debug.Assert(value is >= minValue and <= maxValue);
+									// unsigned:
+									//  global::System.Debug.Assert(value is <= maxValue);
+									RelationalPatternSyntax max = RelationalPattern(TokenWithSpace(SyntaxKind.LessThanEqualsToken), CastExpression(propertyType, LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(maxValue))));
+									RelationalPatternSyntax? min = signed ? RelationalPattern(TokenWithSpace(SyntaxKind.GreaterThanEqualsToken), CastExpression(propertyType, LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(minValue)))) : null;
+									setterStatements.Add(ExpressionStatement(InvocationExpression(
+										ParseName("global::System.Diagnostics.Debug.Assert"),
+										ArgumentList().AddArguments(Argument(
+											IsPatternExpression(
+												valueName,
+												min is null ? max : BinaryPattern(SyntaxKind.AndPattern, min, max)))))));
+								}
+
+								// field = (int)((field & unchecked((int)~mask)) | ((int)(value & mask) << propOffset)));
+								ExpressionSyntax valueAndMaskNoOffset = ParenthesizedExpression(BinaryExpression(SyntaxKind.BitwiseAndExpression, valueName, maskNoOffsetExpr));
+								setterStatements.Add(ExpressionStatement(AssignmentExpression(
 									SyntaxKind.SimpleAssignmentExpression,
 									fieldAccess,
-									CastExpression(
-										fieldType,
-										ParenthesizedExpression(
-											ConditionalExpression(
-												IdentifierName("value"),
-												BinaryExpression(SyntaxKind.BitwiseOrExpression, fieldAccess, maskExpr),
-												fieldAndNotMask))))))
-							.WithSemicolonToken(SemicolonWithLineFeed);
+									CastExpression(fieldType, ParenthesizedExpression(
+										BinaryExpression(
+											SyntaxKind.BitwiseOrExpression,
+											//// (field & unchecked((int)~mask))
+											fieldAndNotMask,
+											//// ((int)(value & mask) << propOffset)
+											ParenthesizedExpression(BinaryExpression(SyntaxKind.LeftShiftExpression, CastExpression(fieldType, valueAndMaskNoOffset), propOffsetExpr))))))));
+								setter = setter.WithBody(Block().AddStatements(setterStatements.ToArray()));
+							}
+							else
+							{
+								// get => (field & getterMask) != 0;
+								getter = getter
+									.WithExpressionBody(ArrowExpressionClause(BinaryExpression(
+										SyntaxKind.NotEqualsExpression,
+										ParenthesizedExpression(BinaryExpression(SyntaxKind.BitwiseAndExpression, fieldAccess, maskExpr)),
+										LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(0)))))
+									.WithSemicolonToken(SemicolonWithLineFeed);
+
+								// set => field = (byte)(value ? field | getterMask : field & unchecked((int)~getterMask));
+								setter = setter
+									.WithExpressionBody(ArrowExpressionClause(
+										AssignmentExpression(
+											SyntaxKind.SimpleAssignmentExpression,
+											fieldAccess,
+											CastExpression(
+												fieldType,
+												ParenthesizedExpression(
+													ConditionalExpression(
+														IdentifierName("value"),
+														BinaryExpression(SyntaxKind.BitwiseOrExpression, fieldAccess, maskExpr),
+														fieldAndNotMask))))))
+									.WithSemicolonToken(SemicolonWithLineFeed);
+							}
+
+							string bitDescription = propertyLengthAsByte == 1 ? $"bit {propertyOffsetAsByte}" : $"bits {propertyOffsetAsByte}-{propertyOffsetAsByte + propertyLengthAsByte - 1}";
+							string allowedRange = propertyLengthAsByte == 1 ? string.Empty : $"Allowed values are [{minValue}..{maxValue}].";
+
+							PropertyDeclarationSyntax bitfieldProperty = PropertyDeclaration(propertyType.WithTrailingTrivia(Space), Identifier(propertyName).WithTrailingTrivia(LineFeed))
+								.AddModifiers(TokenWithSpace(Visibility))
+								.WithAccessorList(AccessorList().AddAccessors(getter, setter))
+								.WithLeadingTrivia(ParseLeadingTrivia($"/// <summary>Gets or sets {bitDescription} in the <see cref=\"{fieldName}\" /> field.{allowedRange}</summary>\n"));
+
+							StringBuilder stringBuilder = new();
+							stringBuilder.AppendLine($"/// <summary>Gets or sets bits {bitDescription} in the <see cref=\"{fieldName}\" /> field.{allowedRange}.</summary>");
+							stringBuilder.AppendLine($"{SyntaxFacts.GetText(Visibility)} {propertyType} {propertyName}");
+							stringBuilder.AppendLine($"{{");
+							stringBuilder.AppendLine($"    [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+							stringBuilder.AppendLine($"    readonly get => (byte)((this._bitfield >> 0) & 0x000000000000001F);");
+							stringBuilder.AppendLine($"    [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+							stringBuilder.AppendLine($"    set");
+							stringBuilder.AppendLine($"    {{");
+							stringBuilder.AppendLine($"        global::System.Diagnostics.Debug.Assert(value is <= (byte)31L);");
+							stringBuilder.AppendLine($"        this._bitfield = (nuint)((this._bitfield & unchecked((nuint)~0x000000000000001F)) | ((nuint)(value & 0x000000000000001F) << 0));");
+							stringBuilder.AppendLine($"    }}");
+							stringBuilder.AppendLine($"}}");
+
+							var bitfieldProperty2 = SyntaxFactory.ParseMemberDeclaration(stringBuilder.ToString()) as PropertyDeclarationSyntax;
+
+							members.Add(bitfieldProperty);
+						}
 					}
-
-					string bitDescription = propLength == 1 ? $"bit {propOffset}" : $"bits {propOffset}-{propOffset + propLength - 1}";
-					string allowedRange = propLength == 1 ? string.Empty : $" Allowed values are [{minValue}..{maxValue}].";
-
-					PropertyDeclarationSyntax bitfieldProperty = PropertyDeclaration(propertyType.WithTrailingTrivia(Space), Identifier(propName).WithTrailingTrivia(LineFeed))
-						.AddModifiers(TokenWithSpace(Visibility))
-						.WithAccessorList(AccessorList().AddAccessors(getter, setter))
-						.WithLeadingTrivia(ParseLeadingTrivia($"/// <summary>Gets or sets {bitDescription} in the <see cref=\"{fieldName}\" /> field.{allowedRange}</summary>\n"));
-
-					members.Add(bitfieldProperty);
 				}
 			}
 			catch (Exception ex)
@@ -390,7 +403,7 @@ public partial class Generator
 			}
 		}
 
-		// Add a SizeOf method, if there is a FlexibleArray field.
+		// Add a SizeOf method, if there is a field with [FlexibleArrayAttribute]
 		if (sizeOfMethod is not null)
 			members.Add(sizeOfMethod);
 
@@ -399,6 +412,7 @@ public partial class Generator
 			c is not StructDeclarationSyntax cs ||
 			!members.OfType<StructDeclarationSyntax>().Any(m => m.Identifier.ValueText == cs.Identifier.ValueText)));
 
+		// Add the additional members from the templates
 		switch (identifierNameSyntax.Identifier.ValueText)
 		{
 			case "RECT":
@@ -411,25 +425,26 @@ public partial class Generator
 				break;
 		}
 
-		StructDeclarationSyntax result = StructDeclaration(identifierNameSyntax.Identifier)
-			.AddMembers(members.ToArray())
-			.WithModifiers(TokenList(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.PartialKeyword)));
+		// Now create the struct declaration syntax with the members
+		StructDeclarationSyntax structDeclarationSyntax =
+			StructDeclaration(identifierNameSyntax.Identifier)
+				.AddMembers(members.ToArray())
+				.WithModifiers(TokenList(TokenWithSpace(Visibility), TokenWithSpace(SyntaxKind.PartialKeyword)));
 
+		// Add [StructLayoutAttribute] with the appropriate char set
 		TypeLayout layout = typeDefinition.GetLayout();
 		CharSet charSet = hasUtf16CharField ? CharSet.Unicode : CharSet.Ansi;
-		if (!layout.IsDefault || explicitLayout || charSet != CharSet.Ansi)
-		{
-			result = result.AddAttributeLists(AttributeList().AddAttributes(StructLayout(typeDefinition.Attributes, layout, charSet)));
-		}
+		if (!layout.IsDefault || explicitLayout || charSet is not CharSet.Ansi)
+			structDeclarationSyntax = structDeclarationSyntax.AddAttributeLists(AttributeList().AddAttributes(StructLayout(typeDefinition.Attributes, layout, charSet)));
 
+		// Add [GuidAttribute] if needed
 		if (FindGuidFromAttribute(typeDefinition) is Guid guid)
-		{
-			result = result.AddAttributeLists(AttributeList().AddAttributes(GUID(guid)));
-		}
+			structDeclarationSyntax = structDeclarationSyntax.AddAttributeLists(AttributeList().AddAttributes(GUID(guid)));
 
-		result = AppendXmlCommentTo(identifierNameSyntax.Identifier.ValueText, result);
+		// Add XML comments
+		structDeclarationSyntax = AppendXmlCommentTo(identifierNameSyntax.Identifier.ValueText, structDeclarationSyntax);
 
-		return result;
+		return structDeclarationSyntax;
 	}
 
 	private StructDeclarationSyntax DeclareVariableLengthInlineArrayHelper(Context context, TypeSyntax fieldType)

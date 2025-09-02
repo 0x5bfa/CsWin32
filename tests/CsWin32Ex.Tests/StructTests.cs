@@ -1,8 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using System.Xml.Linq;
-
 public class StructTests : GeneratorTestBase
 {
 	public StructTests(ITestOutputHelper logger)
@@ -200,9 +198,9 @@ namespace Microsoft.Windows.Sdk
 
 		// Verify that many other *properties* are added that access into the bitfield.
 		// The actual behavior of the properties is verified in the functional unit tests.
-		List<PropertyDeclarationSyntax> properties = structDecl.Members.OfType<PropertyDeclarationSyntax>().ToList();
-		Assert.Contains(properties, p => p.Identifier.ValueText == "Protection" && p.Type is PredefinedTypeSyntax { Keyword: { RawKind: (int)SyntaxKind.ByteKeyword } });
-		Assert.Contains(properties, p => p.Identifier.ValueText == "Shared" && p.Type is PredefinedTypeSyntax { Keyword: { RawKind: (int)SyntaxKind.BoolKeyword } });
+		var properties = structDecl.Members.OfType<PropertyDeclarationSyntax>().ToList();
+		Assert.Contains(properties, p => p.Identifier.ValueText == "Protection" && p.Type is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.ByteKeyword });
+		Assert.Contains(properties, p => p.Identifier.ValueText == "Shared" && p.Type is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.BoolKeyword });
 	}
 
 	[Fact]
@@ -281,6 +279,7 @@ namespace Microsoft.Windows.Sdk
 		[CombinatorialValues(
 		"VARIANT_BOOL", // has a custom conversion to bool and relies on other members being generated
 		"DRIVER_OBJECT", // has an inline array of delegates
+		"MONITORINFOEXW", // Has fixed-size array
 		"DEVICE_RELATIONS", // ends with an inline "flexible" array
 		"FILE_NOTIFY_INFORMATION", // has a "char" flexible array
 		"D3DHAL_CONTEXTCREATEDATA", // contains a field that is a pointer to a struct that is normally managed
