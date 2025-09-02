@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System.Xml.Linq;
+
 public class StructTests : GeneratorTestBase
 {
 	public StructTests(ITestOutputHelper logger)
@@ -146,14 +148,27 @@ namespace Microsoft.Windows.Sdk
 		Assert.IsType<PointerTypeSyntax>(field.Declaration.Type);
 	}
 
-	[Fact]
-	public void FieldWithAssociatedEnum()
+	[Theory, CombinatorialData]
+	public void FieldWithAssociatedEnum(bool allowMarshaling)
 	{
-		this.GenerateApi("SHDESCRIPTIONID");
+		var options = DefaultTestGeneratorOptions with { AllowMarshaling = allowMarshaling };
+		generator = CreateGenerator(options);
+		GenerateApi("SHDESCRIPTIONID");
 
 		var type = (StructDeclarationSyntax)Assert.Single(this.FindGeneratedType("SHDESCRIPTIONID"));
 		PropertyDeclarationSyntax property = Assert.Single(type.Members.OfType<PropertyDeclarationSyntax>(), m => m.Identifier.ValueText == "dwDescriptionId");
 		Assert.Equal("SHDID_ID", Assert.IsType<IdentifierNameSyntax>(property.Type).Identifier.ValueText);
+
+		var field = Assert.Single(type.Members.OfType<FieldDeclarationSyntax>(), m => m.Declaration.Variables[0].Identifier.ValueText == "_dwDescriptionId");
+		if (allowMarshaling)
+		{
+			var fieldType = Assert.IsType<QualifiedNameSyntax>(field.Declaration.Type).Right;
+			Assert.Equal("SHDID_ID", fieldType.Identifier.ValueText);
+		}
+		else
+		{
+			Assert.True(field.Declaration.Type is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.UIntKeyword });
+		}
 	}
 
 	[Fact]
